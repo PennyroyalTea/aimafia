@@ -45,7 +45,14 @@ def main(
 
         # Step 3: Summarize
         click.echo("Step 3/3: Generating game analysis...")
-        report = summarize(transcript)
+
+        def _ask_user(questions: str) -> str:
+            click.echo("\nThe analyzer needs some clarification:\n")
+            click.echo(questions)
+            click.echo()
+            return click.prompt("Your answer")
+
+        report = summarize(transcript, ask_fn=_ask_user)
 
         if output:
             Path(output).write_text(report, encoding="utf-8")
