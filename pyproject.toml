@@ -1,0 +1,14 @@
+[project]
+name = "mafia-analyzer"
+version = "0.1.0"
+description = "Analyze mafia game videos: extract audio, transcribe with diarization, summarize per player"
+requires-python = ">=3.11"
+dependencies = [
+    "yt-dlp>=2024.0",
+    "elevenlabs>=1.0",
+    "anthropic>=0.40",
+    "click>=8.0",
+]
+
+[project.scripts]
+mafia-analyze = "mafia_analyzer.cli:main"
