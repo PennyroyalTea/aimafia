@@ -3,40 +3,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from elevenlabs import ElevenLabs
 
+from mafia_analyzer.models import Transcript, Utterance
 
-@dataclass
-class Utterance:
-    speaker: str
-    text: str
-    start: float
-    end: float
-
-
-@dataclass
-class Transcript:
-    utterances: list[Utterance] = field(default_factory=list)
-    full_text: str = ""
-
-    def as_dialogue(self) -> str:
-        """Return a human-readable dialogue string."""
-        lines: list[str] = []
-        for u in self.utterances:
-            ts = f"[{_fmt_time(u.start)}-{_fmt_time(u.end)}]"
-            lines.append(f"{ts} {u.speaker}: {u.text}")
-        return "\n".join(lines)
-
-
-def _fmt_time(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
-    h, m = divmod(m, 60)
-    if h:
-        return f"{h}:{m:02d}:{s:02d}"
-    return f"{m}:{s:02d}"
+# Re-export for backward compatibility
+__all__ = ["Utterance", "Transcript", "transcribe"]
 
 
 def transcribe(audio_path: Path, language_code: str = "ru") -> Transcript:
