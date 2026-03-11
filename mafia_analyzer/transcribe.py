@@ -6,7 +6,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import httpx
 from elevenlabs import ElevenLabs
 
 
@@ -56,7 +55,7 @@ def transcribe(audio_path: Path, language_code: str = "ru") -> Transcript:
 
     client = ElevenLabs(
         api_key=api_key,
-        timeout=httpx.Timeout(timeout=1800.0, connect=30.0),
+        timeout=1800.0,
     )
 
     with open(audio_path, "rb") as f:
@@ -65,6 +64,7 @@ def transcribe(audio_path: Path, language_code: str = "ru") -> Transcript:
             model_id="scribe_v2",
             diarize=True,
             language_code=language_code,
+            request_options={"timeout_in_seconds": 1800},
         )
 
     # Group consecutive words by speaker into utterances
