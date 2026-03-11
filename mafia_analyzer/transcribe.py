@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
 from elevenlabs import ElevenLabs
 
 
@@ -53,7 +54,10 @@ def transcribe(audio_path: Path, language_code: str = "ru") -> Transcript:
     if not api_key:
         raise RuntimeError("ELEVENLABS_API_KEY environment variable is not set")
 
-    client = ElevenLabs(api_key=api_key)
+    client = ElevenLabs(
+        api_key=api_key,
+        timeout=httpx.Timeout(timeout=1800.0, connect=30.0),
+    )
 
     with open(audio_path, "rb") as f:
         result = client.speech_to_text.convert(

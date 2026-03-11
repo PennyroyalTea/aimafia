@@ -35,7 +35,7 @@ def main(
 
     try:
         # Step 2: Transcribe with diarization
-        click.echo("Step 2/3: Transcribing audio with speaker diarization...")
+        click.echo("Step 2/3: Transcribing audio with speaker diarization (this may take 10+ min for long videos)...")
         transcript = transcribe(audio_path, language_code=language)
         click.echo(f"  Got {len(transcript.utterances)} utterances")
 
