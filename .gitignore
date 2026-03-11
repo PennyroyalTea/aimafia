@@ -9,4 +9,5 @@ build/
 *.mp4
 *.webm
 tmp/
+data/
 transcript.txt
