@@ -1,0 +1,269 @@
+"""Job store with disk persistence and pipeline runner."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TypeVar
+from uuid import uuid4
+
+from pydantic import BaseModel
+
+from mafia_analyzer.audio import extract_audio
+from mafia_analyzer.llm.diarization_improver import improve_diarization
+from mafia_analyzer.llm.game_splitter import split_games
+from mafia_analyzer.llm.summarizer import generate_game_analysis
+from mafia_analyzer.models import (
+    GameAnalysis,
+    JobMeta,
+    JobResult,
+    JobStatus,
+    PipelineStep,
+)
+from mafia_analyzer.transcribe import transcribe
+
+logger = logging.getLogger(__name__)
+
+DATA_DIR = Path(os.environ.get("MAFIA_DATA_DIR", "./data"))
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def _job_dir(job_id: str) -> Path:
+    return DATA_DIR / "jobs" / job_id
+
+
+def _save_json(path: Path, model: BaseModel) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(model.model_dump_json(indent=2))
+
+
+def _load_json(path: Path, model_cls: type[T]) -> T:
+    return model_cls.model_validate_json(path.read_text())
+
+
+class JobStore:
+    def __init__(self) -> None:
+        self._jobs: dict[str, dict] = {}
+        self._subscribers: dict[str, list[asyncio.Queue]] = {}
+        self.running_tasks: dict[str, asyncio.Task] = {}
+
+    def create_job(self, video_url: str, language: str) -> str:
+        job_id = str(uuid4())
+        meta = JobMeta(
+            job_id=job_id,
+            video_url=video_url,
+            language=language,
+            created_at=datetime.now(timezone.utc),
+        )
+        self._jobs[job_id] = {
+            "job_id": job_id,
+            "video_url": video_url,
+            "language": language,
+            "meta": meta,
+            "status": JobStatus(job_id=job_id, step=PipelineStep.downloading),
+            "result": None,
+        }
+        self._subscribers[job_id] = []
+        d = _job_dir(job_id)
+        d.mkdir(parents=True, exist_ok=True)
+        _save_json(d / "meta.json", meta)
+        return job_id
+
+    def load_from_disk(self) -> None:
+        """Load previously persisted jobs from disk."""
+        jobs_root = DATA_DIR / "jobs"
+        if not jobs_root.exists():
+            return
+        for d in sorted(jobs_root.iterdir()):
+            meta_path = d / "meta.json"
+            if not d.is_dir() or not meta_path.exists():
+                continue
+            job_id = d.name
+            if job_id in self._jobs:
+                continue
+            meta = _load_json(meta_path, JobMeta)
+            result_path = d / "result.json"
+            if result_path.exists():
+                result = _load_json(result_path, JobResult)
+                step = PipelineStep.done if result.error is None else PipelineStep.failed
+            else:
+                result = JobResult(job_id=job_id, error="Job interrupted (server restart)")
+                step = PipelineStep.failed
+                _save_json(result_path, result)
+            status = JobStatus(
+                job_id=job_id,
+                step=step,
+                detail=result.error or "",
+            )
+            self._jobs[job_id] = {
+                "job_id": job_id,
+                "video_url": meta.video_url,
+                "language": meta.language,
+                "meta": meta,
+                "status": status,
+                "result": result,
+            }
+        logger.info("Loaded %d job(s) from disk", len(self._jobs))
+
+    def subscribe(self, job_id: str) -> asyncio.Queue:
+        queue: asyncio.Queue = asyncio.Queue()
+        self._subscribers.setdefault(job_id, []).append(queue)
+        # Send current status immediately
+        job = self._jobs.get(job_id)
+        if job:
+            queue.put_nowait(job["status"])
+            # If already finished, also send the result
+            if job["result"] is not None:
+                queue.put_nowait(job["result"])
+        return queue
+
+    def unsubscribe(self, job_id: str, queue: asyncio.Queue) -> None:
+        subs = self._subscribers.get(job_id, [])
+        if queue in subs:
+            subs.remove(queue)
+
+    async def _notify(self, job_id: str, event: JobStatus | JobResult) -> None:
+        for queue in self._subscribers.get(job_id, []):
+            await queue.put(event)
+
+    async def update_status(
+        self, job_id: str, step: PipelineStep, detail: str = ""
+    ) -> None:
+        status = JobStatus(job_id=job_id, step=step, detail=detail)
+        self._jobs[job_id]["status"] = status
+        await self._notify(job_id, status)
+
+    async def set_result(self, job_id: str, result: JobResult) -> None:
+        step = PipelineStep.done if result.error is None else PipelineStep.failed
+        status = JobStatus(
+            job_id=job_id,
+            step=step,
+            detail=result.error or "",
+        )
+        self._jobs[job_id]["status"] = status
+        self._jobs[job_id]["result"] = result
+        await self._notify(job_id, status)
+        await self._notify(job_id, result)
+
+    def get_job(self, job_id: str) -> dict | None:
+        return self._jobs.get(job_id)
+
+
+job_store = JobStore()
+
+
+async def run_pipeline(job_id: str, video_url: str, language: str) -> None:
+    """Run the full analysis pipeline for a job."""
+    audio_path = None
+    loop = asyncio.get_running_loop()
+    jdir = _job_dir(job_id)
+
+    def _progress(step: PipelineStep, detail: str) -> None:
+        """Sync callback usable from worker threads."""
+        asyncio.run_coroutine_threadsafe(
+            job_store.update_status(job_id, step, detail), loop
+        )
+
+    try:
+        # Step 1: Download with progress
+        await job_store.update_status(job_id, PipelineStep.downloading)
+        audio_path = await asyncio.to_thread(
+            extract_audio,
+            video_url,
+            None,
+            lambda detail: _progress(PipelineStep.downloading, detail),
+        )
+
+        # Step 2: Transcribe (no progress from ElevenLabs API)
+        await job_store.update_status(
+            job_id, PipelineStep.transcribing,
+            "Sending audio to ElevenLabs (no progress available)...",
+        )
+        transcript = await asyncio.to_thread(transcribe, audio_path, language)
+        _save_json(jdir / "transcript.json", transcript)
+        await job_store.update_status(
+            job_id, PipelineStep.transcribing,
+            f"Done -- {len(transcript.utterances)} utterances",
+        )
+
+        # Step 3: Split games
+        await job_store.update_status(
+            job_id, PipelineStep.splitting_games, "Analyzing transcript...",
+        )
+        split_result = await asyncio.to_thread(split_games, transcript)
+        _save_json(jdir / "split.json", split_result)
+        n_games = len(split_result.games)
+        await job_store.update_status(
+            job_id, PipelineStep.splitting_games,
+            f"Found {n_games} game(s)",
+        )
+
+        # Step 4: Improve diarization per game
+        improved_transcripts = []
+        for i, game in enumerate(split_result.games, 1):
+            await job_store.update_status(
+                job_id, PipelineStep.improving_diarization,
+                f"Game {i}/{n_games}: identifying players...",
+            )
+            game_utterances = transcript.utterances[
+                game.start_utterance : game.end_utterance
+            ]
+            improved = await asyncio.to_thread(
+                improve_diarization, game_utterances
+            )
+            n_players = len(
+                [m for m in improved.mappings if m.resolved_name != "Judge"]
+            )
+            await job_store.update_status(
+                job_id, PipelineStep.improving_diarization,
+                f"Game {i}/{n_games}: found {n_players} players",
+            )
+            _save_json(jdir / f"diarization_{i}.json", improved)
+            improved_transcripts.append(improved)
+
+        # Step 5: Generate summaries per game
+        game_analyses: list[GameAnalysis] = []
+        for i, (game, improved) in enumerate(
+            zip(split_result.games, improved_transcripts), 1
+        ):
+            await job_store.update_status(
+                job_id, PipelineStep.generating_summaries,
+                f"Game {i}/{n_games}: generating summary...",
+            )
+            analysis = await asyncio.to_thread(
+                generate_game_analysis, improved, game.game_number, language
+            )
+            await job_store.update_status(
+                job_id, PipelineStep.generating_summaries,
+                f"Game {i}/{n_games}: done",
+            )
+            _save_json(jdir / f"analysis_{i}.json", analysis)
+            game_analyses.append(analysis)
+
+        result = JobResult(job_id=job_id, games=game_analyses)
+        _save_json(jdir / "result.json", result)
+        await job_store.set_result(job_id, result)
+
+    except Exception:
+        import traceback
+
+        logger.exception("Pipeline failed for job %s", job_id)
+        error_result = JobResult(
+            job_id=job_id, error=traceback.format_exc()
+        )
+        _save_json(jdir / "result.json", error_result)
+        await job_store.set_result(job_id, error_result)
+
+    finally:
+        # Cleanup audio
+        if audio_path is not None:
+            try:
+                shutil.rmtree(audio_path.parent, ignore_errors=True)
+            except Exception:
+                pass
+        job_store.running_tasks.pop(job_id, None)
