@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv(override=True)
 from fastapi.middleware.cors import CORSMiddleware
 
 from mafia_analyzer.api.jobs import job_store

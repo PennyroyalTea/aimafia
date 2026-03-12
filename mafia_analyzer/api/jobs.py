@@ -23,6 +23,7 @@ from mafia_analyzer.models import (
     JobResult,
     JobStatus,
     PipelineStep,
+    Transcript,
 )
 from mafia_analyzer.transcribe import transcribe
 
@@ -153,12 +154,40 @@ class JobStore:
     def get_job(self, job_id: str) -> dict | None:
         return self._jobs.get(job_id)
 
+    def find_cached_transcript(
+        self, video_url: str, language: str, exclude_job_id: str,
+    ) -> Transcript | None:
+        """Find a saved transcript from a previous job with the same URL and language."""
+        for job in self._jobs.values():
+            if (
+                job["job_id"] != exclude_job_id
+                and job["video_url"] == video_url
+                and job["language"] == language
+            ):
+                path = _job_dir(job["job_id"]) / "transcript.json"
+                if path.exists():
+                    return _load_json(path, Transcript)
+        return None
+
 
 job_store = JobStore()
 
 
-async def run_pipeline(job_id: str, video_url: str, language: str) -> None:
-    """Run the full analysis pipeline for a job."""
+async def run_pipeline(
+    job_id: str,
+    video_url: str,
+    language: str,
+    mode: str = "full",
+    source_file: Path | None = None,
+) -> None:
+    """Run the full analysis pipeline for a job.
+
+    mode controls caching:
+      - "full": always download + transcribe from scratch
+      - "reuse_transcript": find cached transcript, skip download/transcribe
+
+    If source_file is provided, skip download and use it directly.
+    """
     audio_path = None
     loop = asyncio.get_running_loop()
     jdir = _job_dir(job_id)
@@ -170,26 +199,48 @@ async def run_pipeline(job_id: str, video_url: str, language: str) -> None:
         )
 
     try:
-        # Step 1: Download with progress
-        await job_store.update_status(job_id, PipelineStep.downloading)
-        audio_path = await asyncio.to_thread(
-            extract_audio,
-            video_url,
-            None,
-            lambda detail: _progress(PipelineStep.downloading, detail),
-        )
+        if mode == "reuse_transcript":
+            cached = job_store.find_cached_transcript(video_url, language, job_id)
+            if cached is not None:
+                transcript = cached
+                _save_json(jdir / "transcript.json", transcript)
+                await job_store.update_status(
+                    job_id, PipelineStep.transcribing,
+                    f"Reusing cached transcript ({len(transcript.utterances)} utterances)",
+                )
+            else:
+                # No cached transcript -- fall back to full pipeline
+                mode = "full"
 
-        # Step 2: Transcribe (no progress from ElevenLabs API)
-        await job_store.update_status(
-            job_id, PipelineStep.transcribing,
-            "Sending audio to ElevenLabs (no progress available)...",
-        )
-        transcript = await asyncio.to_thread(transcribe, audio_path, language)
-        _save_json(jdir / "transcript.json", transcript)
-        await job_store.update_status(
-            job_id, PipelineStep.transcribing,
-            f"Done -- {len(transcript.utterances)} utterances",
-        )
+        if mode == "full":
+            if source_file is not None:
+                # File was uploaded directly -- skip download
+                audio_path = source_file
+                await job_store.update_status(
+                    job_id, PipelineStep.downloading,
+                    f"Using uploaded file: {source_file.name}",
+                )
+            else:
+                # Step 1: Download with progress
+                await job_store.update_status(job_id, PipelineStep.downloading)
+                audio_path = await asyncio.to_thread(
+                    extract_audio,
+                    video_url,
+                    None,
+                    lambda detail: _progress(PipelineStep.downloading, detail),
+                )
+
+            # Step 2: Transcribe (no progress from ElevenLabs API)
+            await job_store.update_status(
+                job_id, PipelineStep.transcribing,
+                "Sending audio to ElevenLabs (no progress available)...",
+            )
+            transcript = await asyncio.to_thread(transcribe, audio_path, language)
+            _save_json(jdir / "transcript.json", transcript)
+            await job_store.update_status(
+                job_id, PipelineStep.transcribing,
+                f"Done -- {len(transcript.utterances)} utterances",
+            )
 
         # Step 3: Split games
         await job_store.update_status(
@@ -260,8 +311,8 @@ async def run_pipeline(job_id: str, video_url: str, language: str) -> None:
         await job_store.set_result(job_id, error_result)
 
     finally:
-        # Cleanup audio
-        if audio_path is not None:
+        # Cleanup audio (skip if it's an uploaded file living in the job dir)
+        if audio_path is not None and source_file is None:
             try:
                 shutil.rmtree(audio_path.parent, ignore_errors=True)
             except Exception:

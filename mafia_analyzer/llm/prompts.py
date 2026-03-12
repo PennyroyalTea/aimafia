@@ -10,7 +10,12 @@ LANGUAGE_NAMES: dict[str, str] = {
 def language_instruction(lang_code: str) -> str:
     """Return a firm instruction to write output in the given language."""
     name = LANGUAGE_NAMES.get(lang_code, lang_code)
-    return f"IMPORTANT: Write ALL text output in {name}. Do not mix languages."
+    return (
+        f"IMPORTANT: Write ALL text output in {name}. "
+        "Note: the transcript may contain a mix of languages "
+        "(e.g. some players speaking Russian and others Ukrainian) -- "
+        f"this is normal. Always write your output in {name} regardless."
+    )
 
 GAME_SPLITTER_SYSTEM = """\
 You are an expert at analyzing transcripts of mafia (werewolf) game sessions.

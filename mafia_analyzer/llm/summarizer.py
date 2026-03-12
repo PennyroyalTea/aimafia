@@ -49,7 +49,7 @@ def generate_game_analysis(
 
     # Pass 1: Game summary
     summary_msg = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=8192,
         system=GAME_SUMMARY_SYSTEM + lang_suffix,
         messages=[
@@ -68,7 +68,7 @@ def generate_game_analysis(
 
     # Pass 2: Personal advice
     advice_msg = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=8192,
         system=PERSONAL_ADVICE_SYSTEM + lang_suffix,
         messages=[

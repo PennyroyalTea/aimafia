@@ -29,7 +29,7 @@ def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
     transcript_text = "\n".join(lines)
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=4096,
         system=DIARIZATION_IMPROVER_SYSTEM,
         messages=[

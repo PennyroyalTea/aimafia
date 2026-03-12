@@ -29,7 +29,7 @@ def split_games(transcript: Transcript) -> SplitResult:
     utterance_text = "\n".join(lines)
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-opus-4-6",
         max_tokens=4096,
         system=GAME_SPLITTER_SYSTEM,
         messages=[

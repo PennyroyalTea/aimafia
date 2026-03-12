@@ -2,17 +2,67 @@ import type { JobResult, JobStatus } from "../types";
 
 const API_BASE = "/api";
 
+export interface UrlMatch {
+  job_id: string;
+  language: string;
+  created_at: string;
+  has_transcript: boolean;
+  has_result: boolean;
+}
+
+export async function checkUrl(
+  url: string,
+  language: string
+): Promise<UrlMatch[]> {
+  const res = await fetch(
+    `${API_BASE}/check-url?url=${encodeURIComponent(url)}&language=${encodeURIComponent(language)}`
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to check URL: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function submitJob(
   videoUrl: string,
-  language: string = "ru"
+  language: string = "ru",
+  mode: string = "full"
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/jobs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ video_url: videoUrl, language }),
+    body: JSON.stringify({ video_url: videoUrl, language, mode }),
   });
   if (!res.ok) {
     throw new Error(`Failed to submit job: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.job_id;
+}
+
+export async function getJob(
+  jobId: string
+): Promise<{ status: JobStatus; result?: JobResult }> {
+  const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+  if (!res.ok) {
+    throw new Error(`Failed to get job: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function uploadFile(
+  file: File,
+  language: string = "ru"
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("language", language);
+  const res = await fetch(`${API_BASE}/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to upload file: ${res.statusText}`);
   }
   const data = await res.json();
   return data.job_id;

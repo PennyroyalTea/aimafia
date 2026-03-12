@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from mafia_analyzer.api.jobs import job_store, run_pipeline
-from mafia_analyzer.models import JobResult, JobStatus
+from mafia_analyzer.api.jobs import _job_dir, job_store, run_pipeline
+from mafia_analyzer.models import JobResult, JobStatus, PipelineStep
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ router = APIRouter()
 class SubmitJobRequest(BaseModel):
     video_url: str
     language: str = "ru"
+    mode: Literal["full", "reuse_transcript", "reuse_result"] = "full"
 
 
 class SubmitJobResponse(BaseModel):
@@ -29,6 +31,37 @@ class JobListItem(BaseModel):
     language: str
     created_at: str
     status: str
+
+
+class UrlMatch(BaseModel):
+    job_id: str
+    language: str
+    created_at: str
+    has_transcript: bool
+    has_result: bool
+
+
+@router.get("/check-url", response_model=list[UrlMatch])
+async def check_url(url: str = Query(...), language: str = Query("ru")):
+    matches = []
+    for job in job_store._jobs.values():
+        if job["video_url"] != url:
+            continue
+        status: JobStatus = job["status"]
+        if status.step not in (PipelineStep.done, PipelineStep.failed):
+            continue
+        meta = job.get("meta")
+        jdir = _job_dir(job["job_id"])
+        matches.append(
+            UrlMatch(
+                job_id=job["job_id"],
+                language=job["language"],
+                created_at=meta.created_at.isoformat() if meta else "",
+                has_transcript=(jdir / "transcript.json").exists(),
+                has_result=job["result"] is not None and job["result"].error is None,
+            )
+        )
+    return matches
 
 
 @router.get("/jobs", response_model=list[JobListItem])
@@ -49,10 +82,47 @@ async def list_jobs():
     return items
 
 
+@router.post("/upload", response_model=SubmitJobResponse)
+async def upload_file(
+    file: UploadFile,
+    language: str = Form("ru"),
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    job_id = job_store.create_job(file.filename, language)
+    jdir = _job_dir(job_id)
+
+    dest = jdir / file.filename
+    contents = await file.read()
+    dest.write_bytes(contents)
+
+    task = asyncio.create_task(
+        run_pipeline(job_id, file.filename, language, source_file=dest)
+    )
+    job_store.running_tasks[job_id] = task
+    return SubmitJobResponse(job_id=job_id)
+
+
 @router.post("/jobs", response_model=SubmitJobResponse)
 async def submit_job(req: SubmitJobRequest):
+    if req.mode == "reuse_result":
+        # Find a completed job with the same URL and return its job_id directly
+        for job in job_store._jobs.values():
+            if (
+                job["video_url"] == req.video_url
+                and job["language"] == req.language
+                and job["result"] is not None
+                and job["result"].error is None
+            ):
+                return SubmitJobResponse(job_id=job["job_id"])
+        # No matching result found -- fall through to full run
+        req.mode = "full"
+
     job_id = job_store.create_job(req.video_url, req.language)
-    task = asyncio.create_task(run_pipeline(job_id, req.video_url, req.language))
+    task = asyncio.create_task(
+        run_pipeline(job_id, req.video_url, req.language, mode=req.mode)
+    )
     job_store.running_tasks[job_id] = task
     return SubmitJobResponse(job_id=job_id)
 
