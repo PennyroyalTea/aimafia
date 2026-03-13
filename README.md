@@ -1,14 +1,15 @@
 # Mafia Game Analyzer
 
-Analyze mafia game videos: extract audio, transcribe with speaker diarization, and get per-player game reports.
+Web app that analyzes mafia game videos: extracts audio, transcribes with speaker diarization, splits into individual games, and generates per-player coaching reports.
 
-## Setup
+## Requirements
 
-```bash
-pip install .
-```
+- Python 3.11+
+- Node.js 18+
+- `yt-dlp` and `ffmpeg` on your system
+- ElevenLabs API key (transcription)
+- Anthropic API key (analysis)
 
-Requires `yt-dlp` and `ffmpeg` on your system:
 ```bash
 # macOS
 brew install yt-dlp ffmpeg
@@ -18,27 +19,36 @@ sudo apt install ffmpeg
 pip install yt-dlp
 ```
 
-Set your API keys:
-```bash
-export ELEVENLABS_API_KEY=your_key
-export ANTHROPIC_API_KEY=your_key
-```
-
-## Usage
+## Setup
 
 ```bash
-# Basic usage — prints report to stdout
-mafia-analyze "https://youtube.com/watch?v=..."
+# Backend
+pip install .
+cp .env.example .env  # add your API keys
 
-# Save report and transcript
-mafia-analyze "https://youtube.com/watch?v=..." -o report.md --transcript-out transcript.txt
-
-# Specify language (default: ru)
-mafia-analyze "https://youtube.com/watch?v=..." -l en
+# Frontend
+cd frontend && npm install
 ```
+
+## Running
+
+```bash
+# Start backend (port 8000)
+uvicorn mafia_analyzer.api.app:app --reload --port 8000
+
+# Start frontend (port 5173, proxies /api to backend)
+cd frontend && npm run dev
+```
+
+Open http://localhost:5173
 
 ## How it works
 
-1. **Audio extraction** — downloads video via `yt-dlp` and extracts audio as mp3
-2. **Transcription** — sends audio to ElevenLabs Scribe v2 with speaker diarization
-3. **Analysis** — feeds the diarized transcript to Claude for per-player game summary
+1. **Input** -- paste a YouTube/video URL or upload an audio/video file directly
+2. **Audio extraction** -- downloads video via `yt-dlp` and extracts audio (skipped for direct uploads)
+3. **Transcription** -- sends audio to ElevenLabs Scribe v2 with speaker diarization
+4. **Game splitting** -- Claude identifies individual game boundaries within the session
+5. **Diarization improvement** -- Claude maps generic speaker IDs to player identities
+6. **Analysis** -- Claude generates per-game summaries and personalized coaching advice
+
+Progress is streamed to the browser in real time via SSE.
