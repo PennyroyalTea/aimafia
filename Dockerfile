@@ -15,4 +15,4 @@ COPY backend/ backend/
 RUN uv sync --locked --no-dev --no-editable
 COPY --from=frontend /app/frontend/dist frontend/dist
 EXPOSE 8000
-CMD ["/bin/sh", "-c", "uv run uvicorn backend.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD uv run uvicorn backend.api.app:app --host 0.0.0.0 --port $PORT
