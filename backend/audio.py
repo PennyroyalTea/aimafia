@@ -42,12 +42,16 @@ def extract_audio(
     ]
 
     if progress_callback is None:
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"yt-dlp failed:\n{result.stderr or result.stdout}")
     else:
+        output_lines: list[str] = []
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         for line in process.stdout:  # type: ignore[union-attr]
+            output_lines.append(line)
             m = re.search(r"\[download\]\s+(\d+\.?\d*)%", line)
             if m:
                 progress_callback(f"Downloading: {m.group(1)}%")
@@ -55,7 +59,9 @@ def extract_audio(
                 progress_callback("Converting to mp3...")
         process.wait()
         if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, cmd)
+            raise RuntimeError(
+                f"yt-dlp failed (exit {process.returncode}):\n{''.join(output_lines[-20:])}"
+            )
 
     audio_path = output_dir / "audio.mp3"
     if not audio_path.exists():
