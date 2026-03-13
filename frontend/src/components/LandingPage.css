@@ -204,27 +204,6 @@
   }
 }
 
-/* Footer */
-.landing-footer {
-  position: absolute;
-  bottom: 2rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #3d3a36;
-}
-
-.landing-footer-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #c4a882;
-  opacity: 0.6;
-}
-
 /* Responsive */
 @media (max-width: 480px) {
   .landing-title {

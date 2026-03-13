@@ -86,10 +86,6 @@ export function LandingPage() {
         )}
       </main>
 
-      <footer className="landing-footer">
-        <span className="landing-footer-dot" />
-        <span>Moscow</span>
-      </footer>
     </div>
   );
 }
