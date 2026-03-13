@@ -9,6 +9,7 @@ import {
   type UrlMatch,
 } from "./api/client";
 import { JobProgress } from "./components/JobProgress";
+import { LandingPage } from "./components/LandingPage";
 import { ResultsView } from "./components/ResultsView";
 import { UrlInput } from "./components/UrlInput";
 import type { JobResult, PipelineStep } from "./types";
@@ -16,6 +17,11 @@ import type { JobResult, PipelineStep } from "./types";
 type AppState = "idle" | "choosing" | "processing" | "done" | "error";
 
 function App() {
+  // Show landing page on "/" and analyzer on "/app"
+  if (window.location.pathname === "/" || !window.location.pathname.startsWith("/app")) {
+    return <LandingPage />;
+  }
+
   const [appState, setAppState] = useState<AppState>("idle");
   const [currentStep, setCurrentStep] = useState<PipelineStep>("downloading");
   const [stepDetail, setStepDetail] = useState("");

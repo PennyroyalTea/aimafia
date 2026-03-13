@@ -1,0 +1,237 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300;1,9..40,400&display=swap");
+
+.landing {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0a;
+  color: #e8e4df;
+  overflow: hidden;
+  font-family: "DM Sans", sans-serif;
+}
+
+/* Subtle grain overlay */
+.landing-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+}
+
+.landing-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  max-width: 420px;
+  width: 100%;
+}
+
+/* Badge */
+.landing-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #706b63;
+  border: 1px solid #2a2825;
+  border-radius: 100px;
+  padding: 0.35em 1.2em;
+  margin-bottom: 2.5rem;
+}
+
+/* Title */
+.landing-title {
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  font-size: 5.5rem;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-align: center;
+  margin: 0 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-title-accent {
+  font-style: italic;
+  color: #c4a882;
+}
+
+/* Description */
+.landing-description {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #8a847c;
+  text-align: center;
+  max-width: 320px;
+  margin: 0 0 2rem;
+  font-weight: 300;
+}
+
+/* Divider */
+.landing-divider {
+  width: 40px;
+  height: 1px;
+  background: #2a2825;
+  margin-bottom: 2.5rem;
+}
+
+/* Form */
+.landing-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.landing-form-heading {
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  font-size: 1.4rem;
+  color: #e8e4df;
+  margin: 0 0 0.25rem;
+  text-align: center;
+}
+
+.landing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.landing-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5a5650;
+}
+
+.landing-input {
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.95rem;
+  padding: 0.7em 0.9em;
+  background: #141312;
+  border: 1px solid #2a2825;
+  border-radius: 6px;
+  color: #e8e4df;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.landing-input::placeholder {
+  color: #3d3a36;
+}
+
+.landing-input:focus {
+  border-color: #c4a882;
+}
+
+/* Submit */
+.landing-submit {
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0.75em 1.5em;
+  margin-top: 0.5rem;
+  background: #c4a882;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.landing-submit:hover:not(:disabled) {
+  background: #d4bc9a;
+  transform: translateY(-1px);
+}
+
+.landing-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.landing-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Confirmation */
+.landing-confirmation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  animation: landing-fade-in 0.4s ease;
+}
+
+.landing-confirmation-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid #2a2825;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #c4a882;
+}
+
+.landing-confirmation-text {
+  font-size: 1rem;
+  color: #8a847c;
+  text-align: center;
+  margin: 0;
+}
+
+@keyframes landing-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Footer */
+.landing-footer {
+  position: absolute;
+  bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #3d3a36;
+}
+
+.landing-footer-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c4a882;
+  opacity: 0.6;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .landing-title {
+    font-size: 4rem;
+  }
+
+  .landing-main {
+    padding: 1.5rem;
+  }
+}
