@@ -6,9 +6,9 @@ import os
 
 import anthropic
 
-from mafia_analyzer.llm import extract_json
-from mafia_analyzer.llm.prompts import DIARIZATION_IMPROVER_SYSTEM
-from mafia_analyzer.models import ImprovedTranscript, Utterance
+from backend.llm import extract_json
+from backend.llm.prompts import DIARIZATION_IMPROVER_SYSTEM
+from backend.models import ImprovedTranscript, Utterance
 
 
 def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
@@ -57,7 +57,7 @@ def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
         for u in utterances
     ]
 
-    from mafia_analyzer.models import SpeakerMapping
+    from backend.models import SpeakerMapping
 
     return ImprovedTranscript(
         mappings=[SpeakerMapping.model_validate(m) for m in data["mappings"]],

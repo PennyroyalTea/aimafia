@@ -34,7 +34,7 @@ cd frontend && npm install
 
 ```bash
 # Start backend (port 8000)
-uvicorn mafia_analyzer.api.app:app --reload --port 8000
+uvicorn backend.api.app:app --reload --port 8000
 
 # Start frontend (port 5173, proxies /api to backend)
 cd frontend && npm run dev

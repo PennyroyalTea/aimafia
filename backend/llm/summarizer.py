@@ -7,13 +7,13 @@ import os
 
 import anthropic
 
-from mafia_analyzer.llm import extract_json
-from mafia_analyzer.llm.prompts import (
+from backend.llm import extract_json
+from backend.llm.prompts import (
     GAME_SUMMARY_SYSTEM,
     PERSONAL_ADVICE_SYSTEM,
     language_instruction,
 )
-from mafia_analyzer.models import (
+from backend.models import (
     GameAnalysis,
     GameSummary,
     ImprovedTranscript,

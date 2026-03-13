@@ -13,8 +13,8 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv(override=True)
 from fastapi.middleware.cors import CORSMiddleware
 
-from mafia_analyzer.api.jobs import job_store
-from mafia_analyzer.api.routes import router
+from backend.api.jobs import job_store
+from backend.api.routes import router
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 

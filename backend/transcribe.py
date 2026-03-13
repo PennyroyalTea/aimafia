@@ -7,7 +7,7 @@ from pathlib import Path
 
 from elevenlabs import ElevenLabs
 
-from mafia_analyzer.models import Transcript, Utterance
+from backend.models import Transcript, Utterance
 
 # Re-export for backward compatibility
 __all__ = ["Utterance", "Transcript", "transcribe"]

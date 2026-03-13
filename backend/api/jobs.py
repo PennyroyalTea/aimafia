@@ -13,11 +13,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-from mafia_analyzer.audio import extract_audio
-from mafia_analyzer.llm.diarization_improver import improve_diarization
-from mafia_analyzer.llm.game_splitter import split_games
-from mafia_analyzer.llm.summarizer import generate_game_analysis
-from mafia_analyzer.models import (
+from backend.audio import extract_audio
+from backend.llm.diarization_improver import improve_diarization
+from backend.llm.game_splitter import split_games
+from backend.llm.summarizer import generate_game_analysis
+from backend.models import (
     GameAnalysis,
     JobMeta,
     JobResult,
@@ -25,7 +25,7 @@ from mafia_analyzer.models import (
     PipelineStep,
     Transcript,
 )
-from mafia_analyzer.transcribe import transcribe
+from backend.transcribe import transcribe
 
 logger = logging.getLogger(__name__)
 

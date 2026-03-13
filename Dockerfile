@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir uv yt-dlp
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
-COPY mafia_analyzer/ mafia_analyzer/
+COPY backend/ backend/
 RUN uv sync --locked --no-dev --no-editable
 COPY --from=frontend /app/frontend/dist frontend/dist
 EXPOSE 8000
-CMD uv run uvicorn mafia_analyzer.api.app:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD uv run uvicorn backend.api.app:app --host 0.0.0.0 --port ${PORT:-8000}

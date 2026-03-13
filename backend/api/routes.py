@@ -9,8 +9,8 @@ from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from mafia_analyzer.api.jobs import _job_dir, job_store, run_pipeline
-from mafia_analyzer.models import JobResult, JobStatus, PipelineStep
+from backend.api.jobs import _job_dir, job_store, run_pipeline
+from backend.models import JobResult, JobStatus, PipelineStep
 
 router = APIRouter()
 

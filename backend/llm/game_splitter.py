@@ -6,9 +6,9 @@ import os
 
 import anthropic
 
-from mafia_analyzer.llm import extract_json
-from mafia_analyzer.llm.prompts import GAME_SPLITTER_SYSTEM
-from mafia_analyzer.models import SplitResult, Transcript
+from backend.llm import extract_json
+from backend.llm.prompts import GAME_SPLITTER_SYSTEM
+from backend.models import SplitResult, Transcript
 
 
 def split_games(transcript: Transcript) -> SplitResult:
