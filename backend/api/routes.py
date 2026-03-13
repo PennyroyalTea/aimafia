@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from backend.api.jobs import _job_dir, job_store, run_pipeline
-from backend.models import JobResult, JobStatus, PipelineStep
+from backend.models import InterestSubmission, JobResult, JobStatus, PipelineStep
+
+DATA_DIR = Path(os.environ.get("MAFIA_DATA_DIR", "./data"))
 
 router = APIRouter()
 
@@ -39,6 +46,17 @@ class UrlMatch(BaseModel):
     created_at: str
     has_transcript: bool
     has_result: bool
+
+
+@router.post("/interest")
+async def submit_interest(submission: InterestSubmission):
+    interests_dir = DATA_DIR / "interests"
+    interests_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"{ts}_{uuid4().hex[:8]}.json"
+    path = interests_dir / filename
+    path.write_text(submission.model_dump_json(indent=2))
+    return {"ok": True}
 
 
 @router.get("/check-url", response_model=list[UrlMatch])

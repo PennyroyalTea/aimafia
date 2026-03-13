@@ -116,6 +116,14 @@ class JobStatus(BaseModel):
     detail: str = ""
 
 
+class InterestSubmission(BaseModel):
+    name: str
+    email: str
+    role: str  # "organiser" | "player" | "both"
+    location: str
+    comment: str = ""
+
+
 class JobMeta(BaseModel):
     job_id: str
     video_url: str

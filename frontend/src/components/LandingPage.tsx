@@ -1,21 +1,39 @@
 import { useState, type FormEvent } from "react";
+import { submitInterest } from "../api/client";
 import "./LandingPage.css";
 
-export function LandingPage() {
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+type Step = "name" | "details" | "done";
 
-  const handleSubmit = async (e: FormEvent) => {
+export function LandingPage() {
+  const [step, setStep] = useState<Step>("name");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("player");
+  const [location, setLocation] = useState("");
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleNameSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !contact.trim()) return;
+    if (!name.trim()) return;
+    setStep("details");
+  };
+
+  const handleDetailsSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !location.trim()) return;
 
     setSubmitting(true);
-    // Simulate submission -- replace with real endpoint later
-    await new Promise((r) => setTimeout(r, 600));
-    setSubmitted(true);
-    setSubmitting(false);
+    setError("");
+    try {
+      await submitInterest({ name, email, role, location, comment });
+      setStep("done");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -36,15 +54,15 @@ export function LandingPage() {
 
         <div className="landing-divider" />
 
-        {submitted ? (
+        {step === "done" ? (
           <div className="landing-confirmation">
             <div className="landing-confirmation-mark">&#10003;</div>
             <p className="landing-confirmation-text">
               Got it. We'll reach out when a spot opens up.
             </p>
           </div>
-        ) : (
-          <form className="landing-form" onSubmit={handleSubmit}>
+        ) : step === "name" ? (
+          <form className="landing-form" onSubmit={handleNameSubmit}>
             <h2 className="landing-form-heading">Express interest</h2>
             <div className="landing-field">
               <label className="landing-label" htmlFor="name">
@@ -61,31 +79,121 @@ export function LandingPage() {
                 autoComplete="name"
               />
             </div>
-            <div className="landing-field">
-              <label className="landing-label" htmlFor="contact">
-                Telegram or email
-              </label>
-              <input
-                id="contact"
-                className="landing-input"
-                type="text"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                placeholder="@handle or email"
-                required
-              />
-            </div>
             <button
               className="landing-submit"
               type="submit"
-              disabled={submitting || !name.trim() || !contact.trim()}
+              disabled={!name.trim()}
             >
-              {submitting ? "Sending..." : "Request access"}
+              Request access
+            </button>
+          </form>
+        ) : (
+          <form className="landing-form" onSubmit={handleDetailsSubmit}>
+            <h2 className="landing-form-heading">A few more details</h2>
+            <div className="landing-field">
+              <label className="landing-label" htmlFor="detail-name">
+                Name
+              </label>
+              <input
+                id="detail-name"
+                className="landing-input"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                required
+                autoComplete="name"
+              />
+            </div>
+            <div className="landing-field">
+              <label className="landing-label" htmlFor="email">
+                Email
+              </label>
+              <input
+                id="email"
+                className="landing-input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="landing-field">
+              <label className="landing-label">I want to</label>
+              <div className="landing-radio-group">
+                <label className="landing-radio">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="player"
+                    checked={role === "player"}
+                    onChange={(e) => setRole(e.target.value)}
+                  />
+                  <span className="landing-radio-label">Play</span>
+                </label>
+                <label className="landing-radio">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="organiser"
+                    checked={role === "organiser"}
+                    onChange={(e) => setRole(e.target.value)}
+                  />
+                  <span className="landing-radio-label">Organise</span>
+                </label>
+                <label className="landing-radio">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="both"
+                    checked={role === "both"}
+                    onChange={(e) => setRole(e.target.value)}
+                  />
+                  <span className="landing-radio-label">Both</span>
+                </label>
+              </div>
+            </div>
+            <div className="landing-field">
+              <label className="landing-label" htmlFor="location">
+                Location
+              </label>
+              <input
+                id="location"
+                className="landing-input"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="City"
+                required
+                autoComplete="address-level2"
+              />
+            </div>
+            <div className="landing-field">
+              <label className="landing-label" htmlFor="comment">
+                Anything else?
+              </label>
+              <textarea
+                id="comment"
+                className="landing-input landing-textarea"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Optional"
+                rows={3}
+              />
+            </div>
+            {error && <p className="landing-error">{error}</p>}
+            <button
+              className="landing-submit"
+              type="submit"
+              disabled={submitting || !email.trim() || !location.trim()}
+            >
+              {submitting ? "Sending..." : "Submit"}
             </button>
           </form>
         )}
       </main>
-
     </div>
   );
 }

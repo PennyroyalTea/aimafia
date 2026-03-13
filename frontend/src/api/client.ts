@@ -68,6 +68,27 @@ export async function uploadFile(
   return data.job_id;
 }
 
+export interface InterestSubmission {
+  name: string;
+  email: string;
+  role: string;
+  location: string;
+  comment: string;
+}
+
+export async function submitInterest(
+  data: InterestSubmission
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/interest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to submit interest: ${res.statusText}`);
+  }
+}
+
 export function subscribeToJob(
   jobId: string,
   onStatus: (status: JobStatus) => void,
