@@ -13,3 +13,6 @@ dependencies = [
     "sse-starlette>=2.0",
     "python-multipart>=0.0.7",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
