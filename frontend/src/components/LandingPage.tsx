@@ -1,10 +1,21 @@
-import { useState, type FormEvent } from "react";
-import { submitInterest } from "../api/client";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  getAuthConfig,
+  loginWithGoogle,
+  submitInterest,
+  type AuthUser,
+} from "../api/client";
 import "./LandingPage.css";
 
 type Step = "name" | "details" | "done";
 
-export function LandingPage() {
+interface LandingPageProps {
+  user: AuthUser | null;
+  onLogin: (user: AuthUser) => void;
+}
+
+export function LandingPage({ user, onLogin }: LandingPageProps) {
+  // Interest form state
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -12,7 +23,49 @@ export function LandingPage() {
   const [location, setLocation] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+
+  // Auth state
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const [clientId, setClientId] = useState("");
+
+  useEffect(() => {
+    getAuthConfig().then((c) => setClientId(c.google_client_id));
+  }, []);
+
+  useEffect(() => {
+    if (!clientId || !googleBtnRef.current) return;
+    if (user?.authenticated) return;
+
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async (response) => {
+        setAuthLoading(true);
+        setAuthError("");
+        try {
+          const authUser = await loginWithGoogle(response.credential);
+          onLogin(authUser);
+          window.location.href = "/app";
+        } catch (err) {
+          setAuthError(
+            err instanceof Error ? err.message : "Sign-in failed"
+          );
+        } finally {
+          setAuthLoading(false);
+        }
+      },
+    });
+
+    google.accounts.id.renderButton(googleBtnRef.current, {
+      type: "standard",
+      theme: "filled_black",
+      size: "large",
+      text: "signin_with",
+      shape: "rectangular",
+    });
+  }, [clientId, user, onLogin]);
 
   const handleNameSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -25,12 +78,12 @@ export function LandingPage() {
     if (!email.trim() || !location.trim()) return;
 
     setSubmitting(true);
-    setError("");
+    setFormError("");
     try {
       await submitInterest({ name, email, role, location, comment });
       setStep("done");
     } catch {
-      setError("Something went wrong. Please try again.");
+      setFormError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -54,6 +107,30 @@ export function LandingPage() {
 
         <div className="landing-divider" />
 
+        {/* Sign in section */}
+        {user?.authenticated ? (
+          <div className="landing-signed-in">
+            <p className="landing-signed-in-text">
+              Signed in as {user.email}
+            </p>
+            <a href="/app" className="landing-submit">
+              Go to analyzer
+            </a>
+          </div>
+        ) : (
+          <div className="landing-signin">
+            <h2 className="landing-form-heading">Sign in</h2>
+            <div ref={googleBtnRef} className="landing-google-btn" />
+            {authLoading && (
+              <p className="landing-loading">Verifying...</p>
+            )}
+            {authError && <p className="landing-error">{authError}</p>}
+          </div>
+        )}
+
+        <div className="landing-divider" style={{ marginTop: "2.5rem" }} />
+
+        {/* Interest form -- always visible for non-members */}
         {step === "done" ? (
           <div className="landing-confirmation">
             <div className="landing-confirmation-mark">&#10003;</div>
@@ -183,7 +260,7 @@ export function LandingPage() {
                 rows={3}
               />
             </div>
-            {error && <p className="landing-error">{error}</p>}
+            {formError && <p className="landing-error">{formError}</p>}
             <button
               className="landing-submit"
               type="submit"

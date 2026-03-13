@@ -1,11 +1,14 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   checkUrl,
+  getAuthStatus,
   getJob,
+  logout,
   submitJob,
   subscribeToJob,
   uploadFile,
+  type AuthUser,
   type UrlMatch,
 } from "./api/client";
 import { JobProgress } from "./components/JobProgress";
@@ -17,11 +20,40 @@ import type { JobResult, PipelineStep } from "./types";
 type AppState = "idle" | "choosing" | "processing" | "done" | "error";
 
 function App() {
-  // Show landing page on "/" and analyzer on "/app"
-  if (window.location.pathname === "/" || !window.location.pathname.startsWith("/app")) {
-    return <LandingPage />;
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    getAuthStatus().then((user) => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+  }, []);
+
+  const isLanding =
+    window.location.pathname === "/" ||
+    !window.location.pathname.startsWith("/app");
+
+  // Landing page -- public, no auth needed
+  if (isLanding) {
+    return <LandingPage user={authUser} onLogin={setAuthUser} />;
   }
 
+  // Loading auth state
+  if (authLoading) {
+    return null;
+  }
+
+  // Not authenticated but trying to access /app
+  if (!authUser?.authenticated) {
+    window.location.href = "/";
+    return null;
+  }
+
+  return <Analyzer user={authUser} />;
+}
+
+function Analyzer({ user }: { user: AuthUser }) {
   const [appState, setAppState] = useState<AppState>("idle");
   const [currentStep, setCurrentStep] = useState<PipelineStep>("downloading");
   const [stepDetail, setStepDetail] = useState("");
@@ -46,7 +78,6 @@ function App() {
         const jobId = await submitJob(url, language, mode);
 
         if (mode === "reuse_result") {
-          // Job already completed -- fetch result directly
           const jobData = await getJob(jobId);
           if (jobData.result && !jobData.result.error) {
             setResult(jobData.result);
@@ -160,7 +191,6 @@ function App() {
           startPipeline(url, language, "full");
         }
       } catch {
-        // check-url failed -- just proceed with full run
         startPipeline(url, language, "full");
       }
     },
@@ -181,6 +211,11 @@ function App() {
     setUrlMatches([]);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/";
+  };
+
   const lastProcessed = urlMatches.length > 0 ? urlMatches[0].created_at : "";
   const hasTranscript = urlMatches.some((m) => m.has_transcript);
   const hasResult = urlMatches.some(
@@ -189,10 +224,18 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Mafia Game Analyzer</h1>
-      <p className="subtitle">
-        Analyze mafia game videos with AI-powered transcription and coaching
-      </p>
+      <div className="app-header">
+        <div>
+          <h1>Mafia Game Analyzer</h1>
+          <p className="subtitle">
+            Analyze mafia game videos with AI-powered transcription and coaching
+          </p>
+        </div>
+        <button className="logout-btn" onClick={handleLogout}>
+          Sign out
+          {user.email && <span className="logout-email">{user.email}</span>}
+        </button>
+      </div>
 
       <UrlInput
         onSubmit={handleSubmit}

@@ -13,14 +13,17 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv(override=True)
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.auth import init_auth
+from backend.api.auth import router as auth_router
 from backend.api.jobs import job_store
-from backend.api.routes import router
+from backend.api.routes import public_router, router
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_auth()
     job_store.load_from_disk()
     yield
     # Shutdown: cancel any running jobs
@@ -38,6 +41,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
+app.include_router(public_router, prefix="/api")
 app.include_router(router, prefix="/api")
 
 # Serve frontend static files (production build)

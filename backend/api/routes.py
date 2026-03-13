@@ -10,16 +10,21 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from backend.api.auth import require_auth
 from backend.api.jobs import _job_dir, job_store, run_pipeline
 from backend.models import InterestSubmission, JobResult, JobStatus, PipelineStep
 
 DATA_DIR = Path(os.environ.get("MAFIA_DATA_DIR", "./data"))
 
-router = APIRouter()
+# Public routes (landing page interest form)
+public_router = APIRouter()
+
+# Protected routes (require authentication)
+router = APIRouter(dependencies=[Depends(require_auth)])
 
 
 class SubmitJobRequest(BaseModel):
@@ -48,7 +53,7 @@ class UrlMatch(BaseModel):
     has_result: bool
 
 
-@router.post("/interest")
+@public_router.post("/interest")
 async def submit_interest(submission: InterestSubmission):
     interests_dir = DATA_DIR / "interests"
     interests_dir.mkdir(parents=True, exist_ok=True)
@@ -59,7 +64,7 @@ async def submit_interest(submission: InterestSubmission):
     return {"ok": True}
 
 
-@router.get("/interests", response_model=list[InterestSubmission])
+@public_router.get("/interests", response_model=list[InterestSubmission])
 async def list_interests():
     interests_dir = DATA_DIR / "interests"
     if not interests_dir.exists():

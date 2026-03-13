@@ -166,6 +166,46 @@
   color: #e8e4df;
 }
 
+/* Sign-in section */
+.landing-signin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.landing-google-btn {
+  display: flex;
+  justify-content: center;
+}
+
+.landing-loading {
+  color: #8a847c;
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 0;
+}
+
+.landing-signed-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.landing-signed-in-text {
+  font-size: 0.9rem;
+  color: #8a847c;
+  margin: 0;
+}
+
+.landing-signed-in .landing-submit {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+}
+
 /* Error */
 .landing-error {
   font-size: 0.85rem;

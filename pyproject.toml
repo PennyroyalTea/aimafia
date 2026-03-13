@@ -12,6 +12,8 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "sse-starlette>=2.0",
     "python-multipart>=0.0.7",
+    "google-auth>=2.0",
+    "itsdangerous>=2.0",
 ]
 
 [tool.hatch.build.targets.wheel]
