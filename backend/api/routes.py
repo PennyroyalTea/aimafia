@@ -59,6 +59,17 @@ async def submit_interest(submission: InterestSubmission):
     return {"ok": True}
 
 
+@router.get("/interests", response_model=list[InterestSubmission])
+async def list_interests():
+    interests_dir = DATA_DIR / "interests"
+    if not interests_dir.exists():
+        return []
+    results = []
+    for path in sorted(interests_dir.glob("*.json")):
+        results.append(InterestSubmission.model_validate_json(path.read_text()))
+    return results
+
+
 @router.get("/check-url", response_model=list[UrlMatch])
 async def check_url(url: str = Query(...), language: str = Query("ru")):
     matches = []
