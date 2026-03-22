@@ -15,17 +15,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.jobs import job_store
 from backend.api.routes import router
+from backend.db import close_db, init_db
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    job_store.load_from_disk()
+    await init_db()
     yield
     # Shutdown: cancel any running jobs
     for task in job_store.running_tasks.values():
         task.cancel()
+    await close_db()
 
 
 app = FastAPI(title="Mafia Game Analyzer", lifespan=lifespan)

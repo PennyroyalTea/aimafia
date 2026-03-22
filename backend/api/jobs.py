@@ -1,25 +1,21 @@
-"""Job store with disk persistence and pipeline runner."""
+"""Job store backed by MongoDB and pipeline runner."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypeVar
 from uuid import uuid4
 
-from pydantic import BaseModel
-
 from backend.audio import extract_audio
+from backend.db import db
 from backend.llm.diarization_improver import improve_diarization
 from backend.llm.game_splitter import split_games
 from backend.llm.summarizer import generate_game_analysis
 from backend.models import (
     GameAnalysis,
-    JobMeta,
     JobResult,
     JobStatus,
     PipelineStep,
@@ -29,98 +25,50 @@ from backend.transcribe import transcribe
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(os.environ.get("MAFIA_DATA_DIR", "./data"))
-
-T = TypeVar("T", bound=BaseModel)
-
-
-def _job_dir(job_id: str) -> Path:
-    return DATA_DIR / "jobs" / job_id
-
-
-def _save_json(path: Path, model: BaseModel) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(model.model_dump_json(indent=2))
-
-
-def _load_json(path: Path, model_cls: type[T]) -> T:
-    return model_cls.model_validate_json(path.read_text())
-
 
 class JobStore:
     def __init__(self) -> None:
-        self._jobs: dict[str, dict] = {}
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
         self.running_tasks: dict[str, asyncio.Task] = {}
 
-    def create_job(self, video_url: str, language: str) -> str:
+    async def create_job(self, video_url: str, language: str) -> str:
         job_id = str(uuid4())
-        meta = JobMeta(
-            job_id=job_id,
-            video_url=video_url,
-            language=language,
-            created_at=datetime.now(timezone.utc),
-        )
-        self._jobs[job_id] = {
-            "job_id": job_id,
+        doc = {
+            "_id": job_id,
             "video_url": video_url,
             "language": language,
-            "meta": meta,
-            "status": JobStatus(job_id=job_id, step=PipelineStep.downloading),
+            "created_at": datetime.now(timezone.utc),
+            "status": {"step": PipelineStep.downloading.value, "detail": ""},
+            "transcript": None,
+            "split": None,
+            "diarizations": [],
+            "analyses": [],
             "result": None,
         }
+        await db.jobs.insert_one(doc)
         self._subscribers[job_id] = []
-        d = _job_dir(job_id)
-        d.mkdir(parents=True, exist_ok=True)
-        _save_json(d / "meta.json", meta)
         return job_id
 
-    def load_from_disk(self) -> None:
-        """Load previously persisted jobs from disk."""
-        jobs_root = DATA_DIR / "jobs"
-        if not jobs_root.exists():
-            return
-        for d in sorted(jobs_root.iterdir()):
-            meta_path = d / "meta.json"
-            if not d.is_dir() or not meta_path.exists():
-                continue
-            job_id = d.name
-            if job_id in self._jobs:
-                continue
-            meta = _load_json(meta_path, JobMeta)
-            result_path = d / "result.json"
-            if result_path.exists():
-                result = _load_json(result_path, JobResult)
-                step = PipelineStep.done if result.error is None else PipelineStep.failed
-            else:
-                result = JobResult(job_id=job_id, error="Job interrupted (server restart)")
-                step = PipelineStep.failed
-                _save_json(result_path, result)
-            status = JobStatus(
-                job_id=job_id,
-                step=step,
-                detail=result.error or "",
-            )
-            self._jobs[job_id] = {
-                "job_id": job_id,
-                "video_url": meta.video_url,
-                "language": meta.language,
-                "meta": meta,
-                "status": status,
-                "result": result,
-            }
-        logger.info("Loaded %d job(s) from disk", len(self._jobs))
-
-    def subscribe(self, job_id: str) -> asyncio.Queue:
+    async def subscribe(self, job_id: str) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue()
         self._subscribers.setdefault(job_id, []).append(queue)
         # Send current status immediately
-        job = self._jobs.get(job_id)
+        job = await self.get_job(job_id)
         if job:
-            queue.put_nowait(job["status"])
+            status = JobStatus(
+                job_id=job_id,
+                step=PipelineStep(job["status"]["step"]),
+                detail=job["status"].get("detail", ""),
+            )
+            queue.put_nowait(status)
             # If already finished, also send the result
-            if job["result"] is not None:
-                queue.put_nowait(job["result"])
+            if job.get("result") is not None:
+                result = JobResult(
+                    job_id=job_id,
+                    games=[GameAnalysis.model_validate(g) for g in job["result"].get("games", [])],
+                    error=job["result"].get("error"),
+                )
+                queue.put_nowait(result)
         return queue
 
     def unsubscribe(self, job_id: str, queue: asyncio.Queue) -> None:
@@ -136,7 +84,10 @@ class JobStore:
         self, job_id: str, step: PipelineStep, detail: str = ""
     ) -> None:
         status = JobStatus(job_id=job_id, step=step, detail=detail)
-        self._jobs[job_id]["status"] = status
+        await db.jobs.update_one(
+            {"_id": job_id},
+            {"$set": {"status": {"step": step.value, "detail": detail}}},
+        )
         await self._notify(job_id, status)
 
     async def set_result(self, job_id: str, result: JobResult) -> None:
@@ -146,27 +97,34 @@ class JobStore:
             step=step,
             detail=result.error or "",
         )
-        self._jobs[job_id]["status"] = status
-        self._jobs[job_id]["result"] = result
+        await db.jobs.update_one(
+            {"_id": job_id},
+            {"$set": {
+                "status": {"step": step.value, "detail": result.error or ""},
+                "result": result.model_dump(),
+            }},
+        )
         await self._notify(job_id, status)
         await self._notify(job_id, result)
 
-    def get_job(self, job_id: str) -> dict | None:
-        return self._jobs.get(job_id)
+    async def get_job(self, job_id: str) -> dict | None:
+        return await db.jobs.find_one({"_id": job_id})
 
-    def find_cached_transcript(
+    async def find_cached_transcript(
         self, video_url: str, language: str, exclude_job_id: str,
     ) -> Transcript | None:
         """Find a saved transcript from a previous job with the same URL and language."""
-        for job in self._jobs.values():
-            if (
-                job["job_id"] != exclude_job_id
-                and job["video_url"] == video_url
-                and job["language"] == language
-            ):
-                path = _job_dir(job["job_id"]) / "transcript.json"
-                if path.exists():
-                    return _load_json(path, Transcript)
+        doc = await db.jobs.find_one(
+            {
+                "_id": {"$ne": exclude_job_id},
+                "video_url": video_url,
+                "language": language,
+                "transcript": {"$ne": None},
+            },
+            projection={"transcript": 1},
+        )
+        if doc and doc.get("transcript"):
+            return Transcript.model_validate(doc["transcript"])
         return None
 
 
@@ -190,7 +148,6 @@ async def run_pipeline(
     """
     audio_path = None
     loop = asyncio.get_running_loop()
-    jdir = _job_dir(job_id)
 
     def _progress(step: PipelineStep, detail: str) -> None:
         """Sync callback usable from worker threads."""
@@ -200,10 +157,13 @@ async def run_pipeline(
 
     try:
         if mode == "reuse_transcript":
-            cached = job_store.find_cached_transcript(video_url, language, job_id)
+            cached = await job_store.find_cached_transcript(video_url, language, job_id)
             if cached is not None:
                 transcript = cached
-                _save_json(jdir / "transcript.json", transcript)
+                await db.jobs.update_one(
+                    {"_id": job_id},
+                    {"$set": {"transcript": transcript.model_dump()}},
+                )
                 await job_store.update_status(
                     job_id, PipelineStep.transcribing,
                     f"Reusing cached transcript ({len(transcript.utterances)} utterances)",
@@ -236,7 +196,10 @@ async def run_pipeline(
                 "Sending audio to ElevenLabs (no progress available)...",
             )
             transcript = await asyncio.to_thread(transcribe, audio_path, language)
-            _save_json(jdir / "transcript.json", transcript)
+            await db.jobs.update_one(
+                {"_id": job_id},
+                {"$set": {"transcript": transcript.model_dump()}},
+            )
             await job_store.update_status(
                 job_id, PipelineStep.transcribing,
                 f"Done -- {len(transcript.utterances)} utterances",
@@ -247,7 +210,10 @@ async def run_pipeline(
             job_id, PipelineStep.splitting_games, "Analyzing transcript...",
         )
         split_result = await asyncio.to_thread(split_games, transcript)
-        _save_json(jdir / "split.json", split_result)
+        await db.jobs.update_one(
+            {"_id": job_id},
+            {"$set": {"split": split_result.model_dump()}},
+        )
         n_games = len(split_result.games)
         await job_store.update_status(
             job_id, PipelineStep.splitting_games,
@@ -274,7 +240,10 @@ async def run_pipeline(
                 job_id, PipelineStep.improving_diarization,
                 f"Game {i}/{n_games}: found {n_players} players",
             )
-            _save_json(jdir / f"diarization_{i}.json", improved)
+            await db.jobs.update_one(
+                {"_id": job_id},
+                {"$push": {"diarizations": improved.model_dump()}},
+            )
             improved_transcripts.append(improved)
 
         # Step 5: Generate summaries per game
@@ -293,11 +262,13 @@ async def run_pipeline(
                 job_id, PipelineStep.generating_summaries,
                 f"Game {i}/{n_games}: done",
             )
-            _save_json(jdir / f"analysis_{i}.json", analysis)
+            await db.jobs.update_one(
+                {"_id": job_id},
+                {"$push": {"analyses": analysis.model_dump()}},
+            )
             game_analyses.append(analysis)
 
         result = JobResult(job_id=job_id, games=game_analyses)
-        _save_json(jdir / "result.json", result)
         await job_store.set_result(job_id, result)
 
     except Exception:
@@ -307,12 +278,11 @@ async def run_pipeline(
         error_result = JobResult(
             job_id=job_id, error=traceback.format_exc()
         )
-        _save_json(jdir / "result.json", error_result)
         await job_store.set_result(job_id, error_result)
 
     finally:
-        # Cleanup audio (skip if it's an uploaded file living in the job dir)
-        if audio_path is not None and source_file is None:
+        # Cleanup temp audio files
+        if audio_path is not None:
             try:
                 shutil.rmtree(audio_path.parent, ignore_errors=True)
             except Exception:

@@ -3,21 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
-from uuid import uuid4
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from backend.api.jobs import _job_dir, job_store, run_pipeline
-from backend.models import InterestSubmission, JobResult, JobStatus, PipelineStep
-
-DATA_DIR = Path(os.environ.get("MAFIA_DATA_DIR", "./data"))
+from backend.api.jobs import job_store, run_pipeline
+from backend.db import db
+from backend.models import GameAnalysis, InterestSubmission, JobResult, JobStatus, PipelineStep
 
 router = APIRouter()
 
@@ -50,44 +47,40 @@ class UrlMatch(BaseModel):
 
 @router.post("/interest")
 async def submit_interest(submission: InterestSubmission):
-    interests_dir = DATA_DIR / "interests"
-    interests_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"{ts}_{uuid4().hex[:8]}.json"
-    path = interests_dir / filename
-    path.write_text(submission.model_dump_json(indent=2))
+    doc = submission.model_dump()
+    doc["created_at"] = datetime.now(timezone.utc)
+    await db.interests.insert_one(doc)
     return {"ok": True}
 
 
 @router.get("/interests", response_model=list[InterestSubmission])
 async def list_interests():
-    interests_dir = DATA_DIR / "interests"
-    if not interests_dir.exists():
-        return []
-    results = []
-    for path in sorted(interests_dir.glob("*.json")):
-        results.append(InterestSubmission.model_validate_json(path.read_text()))
-    return results
+    docs = await db.interests.find().to_list(None)
+    return [InterestSubmission.model_validate(doc) for doc in docs]
 
 
 @router.get("/check-url", response_model=list[UrlMatch])
 async def check_url(url: str = Query(...), language: str = Query("ru")):
+    docs = await db.jobs.find(
+        {
+            "video_url": url,
+            "status.step": {"$in": [PipelineStep.done.value, PipelineStep.failed.value]},
+        },
+    ).to_list(None)
     matches = []
-    for job in job_store._jobs.values():
-        if job["video_url"] != url:
-            continue
-        status: JobStatus = job["status"]
-        if status.step not in (PipelineStep.done, PipelineStep.failed):
-            continue
-        meta = job.get("meta")
-        jdir = _job_dir(job["job_id"])
+    for doc in docs:
+        created_at = doc.get("created_at")
+        if isinstance(created_at, datetime):
+            created_str = created_at.isoformat()
+        else:
+            created_str = str(created_at) if created_at else ""
         matches.append(
             UrlMatch(
-                job_id=job["job_id"],
-                language=job["language"],
-                created_at=meta.created_at.isoformat() if meta else "",
-                has_transcript=(jdir / "transcript.json").exists(),
-                has_result=job["result"] is not None and job["result"].error is None,
+                job_id=doc["_id"],
+                language=doc["language"],
+                created_at=created_str,
+                has_transcript=doc.get("transcript") is not None,
+                has_result=doc.get("result") is not None and doc["result"].get("error") is None,
             )
         )
     return matches
@@ -95,17 +88,24 @@ async def check_url(url: str = Query(...), language: str = Query("ru")):
 
 @router.get("/jobs", response_model=list[JobListItem])
 async def list_jobs():
+    docs = await db.jobs.find(
+        {},
+        projection={"video_url": 1, "language": 1, "created_at": 1, "status": 1},
+    ).to_list(None)
     items = []
-    for job in job_store._jobs.values():
-        meta = job.get("meta")
-        status: JobStatus = job["status"]
+    for doc in docs:
+        created_at = doc.get("created_at")
+        if isinstance(created_at, datetime):
+            created_str = created_at.isoformat()
+        else:
+            created_str = str(created_at) if created_at else ""
         items.append(
             JobListItem(
-                job_id=job["job_id"],
-                video_url=job["video_url"],
-                language=job["language"],
-                created_at=meta.created_at.isoformat() if meta else "",
-                status=status.step.value,
+                job_id=doc["_id"],
+                video_url=doc["video_url"],
+                language=doc["language"],
+                created_at=created_str,
+                status=doc["status"]["step"],
             )
         )
     return items
@@ -119,10 +119,10 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
-    job_id = job_store.create_job(file.filename, language)
-    jdir = _job_dir(job_id)
+    job_id = await job_store.create_job(file.filename, language)
 
-    dest = jdir / file.filename
+    tmp_dir = tempfile.mkdtemp()
+    dest = Path(tmp_dir) / file.filename
     contents = await file.read()
     dest.write_bytes(contents)
 
@@ -137,18 +137,21 @@ async def upload_file(
 async def submit_job(req: SubmitJobRequest):
     if req.mode == "reuse_result":
         # Find a completed job with the same URL and return its job_id directly
-        for job in job_store._jobs.values():
-            if (
-                job["video_url"] == req.video_url
-                and job["language"] == req.language
-                and job["result"] is not None
-                and job["result"].error is None
-            ):
-                return SubmitJobResponse(job_id=job["job_id"])
+        doc = await db.jobs.find_one(
+            {
+                "video_url": req.video_url,
+                "language": req.language,
+                "result": {"$ne": None},
+                "result.error": None,
+            },
+            projection={"_id": 1},
+        )
+        if doc:
+            return SubmitJobResponse(job_id=doc["_id"])
         # No matching result found -- fall through to full run
         req.mode = "full"
 
-    job_id = job_store.create_job(req.video_url, req.language)
+    job_id = await job_store.create_job(req.video_url, req.language)
     task = asyncio.create_task(
         run_pipeline(job_id, req.video_url, req.language, mode=req.mode)
     )
@@ -158,11 +161,11 @@ async def submit_job(req: SubmitJobRequest):
 
 @router.get("/jobs/{job_id}/events")
 async def job_events(job_id: str):
-    if job_store.get_job(job_id) is None:
+    if await job_store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
     async def event_generator():
-        queue = job_store.subscribe(job_id)
+        queue = await job_store.subscribe(job_id)
         try:
             while True:
                 event = await queue.get()
@@ -188,11 +191,21 @@ async def job_events(job_id: str):
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str):
-    job = job_store.get_job(job_id)
-    if job is None:
+    doc = await job_store.get_job(job_id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    response: dict = {"status": job["status"].model_dump()}
-    if job["result"] is not None:
-        response["result"] = job["result"].model_dump()
+    status = JobStatus(
+        job_id=job_id,
+        step=PipelineStep(doc["status"]["step"]),
+        detail=doc["status"].get("detail", ""),
+    )
+    response: dict = {"status": status.model_dump()}
+    if doc.get("result") is not None:
+        result = JobResult(
+            job_id=job_id,
+            games=[GameAnalysis.model_validate(g) for g in doc["result"].get("games", [])],
+            error=doc["result"].get("error"),
+        )
+        response["result"] = result.model_dump()
     return response
