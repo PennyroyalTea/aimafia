@@ -15,7 +15,7 @@ async def init_db() -> None:
     global _client, db
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017/mafia")
     _client = AsyncIOMotorClient(mongo_url)
-    db = _client.get_default_database()
+    db = _client["mafia"]
     await db.jobs.create_index([("video_url", 1), ("language", 1)])
 
 
