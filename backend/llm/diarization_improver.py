@@ -28,7 +28,8 @@ def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
         lines.append(f"{u.speaker}: {u.text}")
     transcript_text = "\n".join(lines)
 
-    message = client.messages.create(
+    chunks: list[str] = []
+    with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=4096,
         system=DIARIZATION_IMPROVER_SYSTEM,
@@ -38,9 +39,11 @@ def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
                 "content": f"Here is the game transcript:\n\n{transcript_text}",
             }
         ],
-    )
+    ) as stream:
+        for text in stream.text_stream:
+            chunks.append(text)
 
-    raw = message.content[0].text
+    raw = "".join(chunks)
     data = extract_json(raw)
 
     # Build mapping dict

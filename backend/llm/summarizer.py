@@ -34,19 +34,23 @@ def _create_message(
     user_content: str,
     max_tokens: int = 32768,
 ) -> str:
-    """Call the API and raise on truncation."""
-    msg = client.messages.create(
+    """Call the API via streaming to avoid SDK timeout on long requests."""
+    chunks: list[str] = []
+    with client.messages.stream(
         model="claude-opus-4-6",
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
-    )
+    ) as stream:
+        for text in stream.text_stream:
+            chunks.append(text)
+    msg = stream.get_final_message()
     if msg.stop_reason == "max_tokens":
         raise ValueError(
             f"LLM response truncated at {max_tokens} tokens. "
             "The output was too long to fit within the limit."
         )
-    return msg.content[0].text
+    return "".join(chunks)
 
 
 def generate_game_analysis(
