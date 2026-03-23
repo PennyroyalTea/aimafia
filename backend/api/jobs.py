@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.audio import extract_audio
-from backend.db import db
+from backend import mongo
 from backend.llm.diarization_improver import improve_diarization
 from backend.llm.game_splitter import split_games
 from backend.llm.summarizer import generate_game_analysis
@@ -45,7 +45,7 @@ class JobStore:
             "analyses": [],
             "result": None,
         }
-        await db.jobs.insert_one(doc)
+        await mongo.db.jobs.insert_one(doc)
         self._subscribers[job_id] = []
         return job_id
 
@@ -84,7 +84,7 @@ class JobStore:
         self, job_id: str, step: PipelineStep, detail: str = ""
     ) -> None:
         status = JobStatus(job_id=job_id, step=step, detail=detail)
-        await db.jobs.update_one(
+        await mongo.db.jobs.update_one(
             {"_id": job_id},
             {"$set": {"status": {"step": step.value, "detail": detail}}},
         )
@@ -97,7 +97,7 @@ class JobStore:
             step=step,
             detail=result.error or "",
         )
-        await db.jobs.update_one(
+        await mongo.db.jobs.update_one(
             {"_id": job_id},
             {"$set": {
                 "status": {"step": step.value, "detail": result.error or ""},
@@ -108,13 +108,13 @@ class JobStore:
         await self._notify(job_id, result)
 
     async def get_job(self, job_id: str) -> dict | None:
-        return await db.jobs.find_one({"_id": job_id})
+        return await mongo.db.jobs.find_one({"_id": job_id})
 
     async def find_cached_transcript(
         self, video_url: str, language: str, exclude_job_id: str,
     ) -> Transcript | None:
         """Find a saved transcript from a previous job with the same URL and language."""
-        doc = await db.jobs.find_one(
+        doc = await mongo.db.jobs.find_one(
             {
                 "_id": {"$ne": exclude_job_id},
                 "video_url": video_url,
@@ -160,7 +160,7 @@ async def run_pipeline(
             cached = await job_store.find_cached_transcript(video_url, language, job_id)
             if cached is not None:
                 transcript = cached
-                await db.jobs.update_one(
+                await mongo.db.jobs.update_one(
                     {"_id": job_id},
                     {"$set": {"transcript": transcript.model_dump()}},
                 )
@@ -196,7 +196,7 @@ async def run_pipeline(
                 "Sending audio to ElevenLabs (no progress available)...",
             )
             transcript = await asyncio.to_thread(transcribe, audio_path, language)
-            await db.jobs.update_one(
+            await mongo.db.jobs.update_one(
                 {"_id": job_id},
                 {"$set": {"transcript": transcript.model_dump()}},
             )
@@ -210,7 +210,7 @@ async def run_pipeline(
             job_id, PipelineStep.splitting_games, "Analyzing transcript...",
         )
         split_result = await asyncio.to_thread(split_games, transcript)
-        await db.jobs.update_one(
+        await mongo.db.jobs.update_one(
             {"_id": job_id},
             {"$set": {"split": split_result.model_dump()}},
         )
@@ -240,7 +240,7 @@ async def run_pipeline(
                 job_id, PipelineStep.improving_diarization,
                 f"Game {i}/{n_games}: found {n_players} players",
             )
-            await db.jobs.update_one(
+            await mongo.db.jobs.update_one(
                 {"_id": job_id},
                 {"$push": {"diarizations": improved.model_dump()}},
             )
@@ -262,7 +262,7 @@ async def run_pipeline(
                 job_id, PipelineStep.generating_summaries,
                 f"Game {i}/{n_games}: done",
             )
-            await db.jobs.update_one(
+            await mongo.db.jobs.update_one(
                 {"_id": job_id},
                 {"$push": {"analyses": analysis.model_dump()}},
             )

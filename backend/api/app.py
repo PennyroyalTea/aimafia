@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.jobs import job_store
 from backend.api.routes import router
-from backend.db import close_db, init_db
+from backend.mongo import close_db, init_db
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 

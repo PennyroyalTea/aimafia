@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from backend.api.jobs import job_store, run_pipeline
-from backend.db import db
+from backend import mongo
 from backend.models import GameAnalysis, InterestSubmission, JobResult, JobStatus, PipelineStep
 
 router = APIRouter()
@@ -49,19 +49,19 @@ class UrlMatch(BaseModel):
 async def submit_interest(submission: InterestSubmission):
     doc = submission.model_dump()
     doc["created_at"] = datetime.now(timezone.utc)
-    await db.interests.insert_one(doc)
+    await mongo.db.interests.insert_one(doc)
     return {"ok": True}
 
 
 @router.get("/interests", response_model=list[InterestSubmission])
 async def list_interests():
-    docs = await db.interests.find().to_list(None)
+    docs = await mongo.db.interests.find().to_list(None)
     return [InterestSubmission.model_validate(doc) for doc in docs]
 
 
 @router.get("/check-url", response_model=list[UrlMatch])
 async def check_url(url: str = Query(...), language: str = Query("ru")):
-    docs = await db.jobs.find(
+    docs = await mongo.db.jobs.find(
         {
             "video_url": url,
             "status.step": {"$in": [PipelineStep.done.value, PipelineStep.failed.value]},
@@ -88,7 +88,7 @@ async def check_url(url: str = Query(...), language: str = Query("ru")):
 
 @router.get("/jobs", response_model=list[JobListItem])
 async def list_jobs():
-    docs = await db.jobs.find(
+    docs = await mongo.db.jobs.find(
         {},
         projection={"video_url": 1, "language": 1, "created_at": 1, "status": 1},
     ).to_list(None)
@@ -137,7 +137,7 @@ async def upload_file(
 async def submit_job(req: SubmitJobRequest):
     if req.mode == "reuse_result":
         # Find a completed job with the same URL and return its job_id directly
-        doc = await db.jobs.find_one(
+        doc = await mongo.db.jobs.find_one(
             {
                 "video_url": req.video_url,
                 "language": req.language,
