@@ -28,6 +28,27 @@ def _format_transcript(transcript: ImprovedTranscript) -> str:
     return "\n".join(lines)
 
 
+def _create_message(
+    client: anthropic.Anthropic,
+    system: str,
+    user_content: str,
+    max_tokens: int = 16384,
+) -> str:
+    """Call the API and raise on truncation."""
+    msg = client.messages.create(
+        model="claude-sonnet-4-5-20250514",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    if msg.stop_reason == "max_tokens":
+        raise ValueError(
+            f"LLM response truncated at {max_tokens} tokens. "
+            "The output was too long to fit within the limit."
+        )
+    return msg.content[0].text
+
+
 def generate_game_analysis(
     transcript: ImprovedTranscript,
     game_number: int,
@@ -48,41 +69,27 @@ def generate_game_analysis(
     lang_suffix = "\n\n" + language_instruction(language)
 
     # Pass 1: Game summary
-    summary_msg = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=8192,
+    summary_text = _create_message(
+        client,
         system=GAME_SUMMARY_SYSTEM + lang_suffix,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Game number: {game_number}\n\n"
-                    f"Transcript:\n\n{transcript_text}"
-                ),
-            }
-        ],
+        user_content=(
+            f"Game number: {game_number}\n\n"
+            f"Transcript:\n\n{transcript_text}"
+        ),
     )
-
-    summary_data = extract_json(summary_msg.content[0].text)
+    summary_data = extract_json(summary_text)
     summary = GameSummary.model_validate(summary_data)
 
     # Pass 2: Personal advice
-    advice_msg = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=8192,
+    advice_text = _create_message(
+        client,
         system=PERSONAL_ADVICE_SYSTEM + lang_suffix,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Game transcript:\n\n{transcript_text}\n\n"
-                    f"Game summary:\n{json.dumps(summary_data, ensure_ascii=False)}"
-                ),
-            }
-        ],
+        user_content=(
+            f"Game transcript:\n\n{transcript_text}\n\n"
+            f"Game summary:\n{json.dumps(summary_data, ensure_ascii=False)}"
+        ),
     )
-
-    advice_data = extract_json(advice_msg.content[0].text)
+    advice_data = extract_json(advice_text)
     advice_list = [
         PersonalAdvice.model_validate(a) for a in advice_data["advice"]
     ]
