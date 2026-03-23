@@ -1,9 +1,9 @@
-import type { JobResult, JobStatus } from "../types";
+import type { GameResult, GameStatus } from "../types";
 
 const API_BASE = "/api";
 
 export interface UrlMatch {
-  job_id: string;
+  game_id: string;
   language: string;
   created_at: string;
   has_transcript: boolean;
@@ -23,41 +23,41 @@ export async function checkUrl(
   return res.json();
 }
 
-export async function submitJob(
+export async function createGame(
   videoUrl: string,
   language: string = "ru",
   mode: string = "full"
 ): Promise<string> {
-  const res = await fetch(`${API_BASE}/jobs`, {
+  const res = await fetch(`${API_BASE}/games`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ video_url: videoUrl, language, mode }),
   });
   if (!res.ok) {
-    throw new Error(`Failed to submit job: ${res.statusText}`);
+    throw new Error(`Failed to create game: ${res.statusText}`);
   }
   const data = await res.json();
-  return data.job_id;
+  return data.game_id;
 }
 
-export async function getJob(
-  jobId: string
-): Promise<{ status: JobStatus; result?: JobResult }> {
-  const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+export async function getGame(
+  gameId: string
+): Promise<{ status: GameStatus; result?: GameResult }> {
+  const res = await fetch(`${API_BASE}/games/${gameId}`);
   if (!res.ok) {
-    throw new Error(`Failed to get job: ${res.statusText}`);
+    throw new Error(`Failed to get game: ${res.statusText}`);
   }
   return res.json();
 }
 
-export async function uploadFile(
+export async function uploadGameFile(
   file: File,
   language: string = "ru"
 ): Promise<string> {
   const form = new FormData();
   form.append("file", file);
   form.append("language", language);
-  const res = await fetch(`${API_BASE}/upload`, {
+  const res = await fetch(`${API_BASE}/games/upload`, {
     method: "POST",
     body: form,
   });
@@ -65,7 +65,7 @@ export async function uploadFile(
     throw new Error(`Failed to upload file: ${res.statusText}`);
   }
   const data = await res.json();
-  return data.job_id;
+  return data.game_id;
 }
 
 export interface InterestSubmission {
@@ -89,21 +89,21 @@ export async function submitInterest(
   }
 }
 
-export function subscribeToJob(
-  jobId: string,
-  onStatus: (status: JobStatus) => void,
-  onResult: (result: JobResult) => void,
+export function subscribeToGame(
+  gameId: string,
+  onStatus: (status: GameStatus) => void,
+  onResult: (result: GameResult) => void,
   onError: (error: Error) => void
 ): () => void {
-  const es = new EventSource(`${API_BASE}/jobs/${jobId}/events`);
+  const es = new EventSource(`${API_BASE}/games/${gameId}/events`);
 
   es.addEventListener("status", (e) => {
-    const status: JobStatus = JSON.parse(e.data);
+    const status: GameStatus = JSON.parse(e.data);
     onStatus(status);
   });
 
   es.addEventListener("result", (e) => {
-    const result: JobResult = JSON.parse(e.data);
+    const result: GameResult = JSON.parse(e.data);
     onResult(result);
     es.close();
   });

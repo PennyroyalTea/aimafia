@@ -2,17 +2,17 @@ import { useCallback, useRef, useState } from "react";
 import "./App.css";
 import {
   checkUrl,
-  getJob,
-  submitJob,
-  subscribeToJob,
-  uploadFile,
+  createGame,
+  getGame,
+  subscribeToGame,
+  uploadGameFile,
   type UrlMatch,
 } from "./api/client";
 import { JobProgress } from "./components/JobProgress";
 import { LandingPage } from "./components/LandingPage";
 import { ResultsView } from "./components/ResultsView";
 import { UrlInput } from "./components/UrlInput";
-import type { JobResult, PipelineStep } from "./types";
+import type { GameResult, PipelineStep } from "./types";
 
 type AppState = "idle" | "choosing" | "processing" | "done" | "error";
 
@@ -25,7 +25,7 @@ function App() {
   const [appState, setAppState] = useState<AppState>("idle");
   const [currentStep, setCurrentStep] = useState<PipelineStep>("downloading");
   const [stepDetail, setStepDetail] = useState("");
-  const [result, setResult] = useState<JobResult | null>(null);
+  const [result, setResult] = useState<GameResult | null>(null);
   const [error, setError] = useState<string>("");
   const unsubRef = useRef<(() => void) | null>(null);
 
@@ -37,29 +37,29 @@ function App() {
   const startPipeline = useCallback(
     async (url: string, language: string, mode: string) => {
       setAppState("processing");
-      setCurrentStep(mode === "reuse_transcript" ? "splitting_games" : "downloading");
+      setCurrentStep(mode === "reuse_transcript" ? "improving_diarization" : "downloading");
       setStepDetail("");
       setResult(null);
       setError("");
 
       try {
-        const jobId = await submitJob(url, language, mode);
+        const gameId = await createGame(url, language, mode);
 
         if (mode === "reuse_result") {
-          // Job already completed -- fetch result directly
-          const jobData = await getJob(jobId);
-          if (jobData.result && !jobData.result.error) {
-            setResult(jobData.result);
+          // Game already completed -- fetch result directly
+          const gameData = await getGame(gameId);
+          if (gameData.result && !gameData.result.error) {
+            setResult(gameData.result);
             setAppState("done");
           } else {
             setAppState("error");
-            setError(jobData.result?.error || "No result available");
+            setError(gameData.result?.error || "No result available");
           }
           return;
         }
 
-        const unsub = subscribeToJob(
-          jobId,
+        const unsub = subscribeToGame(
+          gameId,
           (status) => {
             setCurrentStep(status.step);
             setStepDetail(status.detail);
@@ -68,12 +68,12 @@ function App() {
               setError(status.detail || "Pipeline failed");
             }
           },
-          (jobResult) => {
-            if (jobResult.error) {
+          (gameResult) => {
+            if (gameResult.error) {
               setAppState("error");
-              setError(jobResult.error);
+              setError(gameResult.error);
             } else {
-              setResult(jobResult);
+              setResult(gameResult);
               setAppState("done");
             }
           },
@@ -101,10 +101,10 @@ function App() {
       setError("");
 
       try {
-        const jobId = await uploadFile(file, language);
+        const gameId = await uploadGameFile(file, language);
 
-        const unsub = subscribeToJob(
-          jobId,
+        const unsub = subscribeToGame(
+          gameId,
           (status) => {
             setCurrentStep(status.step);
             setStepDetail(status.detail);
@@ -113,12 +113,12 @@ function App() {
               setError(status.detail || "Pipeline failed");
             }
           },
-          (jobResult) => {
-            if (jobResult.error) {
+          (gameResult) => {
+            if (gameResult.error) {
               setAppState("error");
-              setError(jobResult.error);
+              setError(gameResult.error);
             } else {
-              setResult(jobResult);
+              setResult(gameResult);
               setAppState("done");
             }
           },

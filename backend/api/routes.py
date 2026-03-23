@@ -12,33 +12,33 @@ from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from backend.api.jobs import job_store, run_pipeline
+from backend.api.games import game_store, run_pipeline
 from backend import mongo
-from backend.models import GameAnalysis, InterestSubmission, JobResult, JobStatus, PipelineStep
+from backend.models import GameAnalysis, GameResult, GameStatus, InterestSubmission, PipelineStep
 
 router = APIRouter()
 
 
-class SubmitJobRequest(BaseModel):
+class CreateGameRequest(BaseModel):
     video_url: str
     language: str = "ru"
     mode: Literal["full", "reuse_transcript", "reuse_result"] = "full"
 
 
-class SubmitJobResponse(BaseModel):
-    job_id: str
+class CreateGameResponse(BaseModel):
+    game_id: str
 
 
-class JobListItem(BaseModel):
-    job_id: str
-    video_url: str
+class GameListItem(BaseModel):
+    game_id: str
+    video_url: str | None
     language: str
     created_at: str
     status: str
 
 
 class UrlMatch(BaseModel):
-    job_id: str
+    game_id: str
     language: str
     created_at: str
     has_transcript: bool
@@ -61,10 +61,10 @@ async def list_interests():
 
 @router.get("/check-url", response_model=list[UrlMatch])
 async def check_url(url: str = Query(...), language: str = Query("ru")):
-    docs = await mongo.db.jobs.find(
+    docs = await mongo.db.games.find(
         {
             "video_url": url,
-            "status.step": {"$in": [PipelineStep.done.value, PipelineStep.failed.value]},
+            "upload_status.step": {"$in": [PipelineStep.done.value, PipelineStep.failed.value]},
         },
     ).to_list(None)
     matches = []
@@ -76,21 +76,21 @@ async def check_url(url: str = Query(...), language: str = Query("ru")):
             created_str = str(created_at) if created_at else ""
         matches.append(
             UrlMatch(
-                job_id=doc["_id"],
+                game_id=doc["_id"],
                 language=doc["language"],
                 created_at=created_str,
                 has_transcript=doc.get("transcript") is not None,
-                has_result=doc.get("result") is not None and doc["result"].get("error") is None,
+                has_result=doc.get("analysis") is not None,
             )
         )
     return matches
 
 
-@router.get("/jobs", response_model=list[JobListItem])
-async def list_jobs():
-    docs = await mongo.db.jobs.find(
+@router.get("/games", response_model=list[GameListItem])
+async def list_games():
+    docs = await mongo.db.games.find(
         {},
-        projection={"video_url": 1, "language": 1, "created_at": 1, "status": 1},
+        projection={"video_url": 1, "source_filename": 1, "language": 1, "created_at": 1, "upload_status": 1},
     ).to_list(None)
     items = []
     for doc in docs:
@@ -100,18 +100,18 @@ async def list_jobs():
         else:
             created_str = str(created_at) if created_at else ""
         items.append(
-            JobListItem(
-                job_id=doc["_id"],
-                video_url=doc["video_url"],
+            GameListItem(
+                game_id=doc["_id"],
+                video_url=doc.get("video_url"),
                 language=doc["language"],
                 created_at=created_str,
-                status=doc["status"]["step"],
+                status=doc["upload_status"]["step"],
             )
         )
     return items
 
 
-@router.post("/upload", response_model=SubmitJobResponse)
+@router.post("/games/upload", response_model=CreateGameResponse)
 async def upload_file(
     file: UploadFile,
     language: str = Form("ru"),
@@ -119,7 +119,11 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
-    job_id = await job_store.create_job(file.filename, language)
+    game_id = await game_store.create_game(
+        video_url=None,
+        language=language,
+        source_filename=file.filename,
+    )
 
     tmp_dir = tempfile.mkdtemp()
     dest = Path(tmp_dir) / file.filename
@@ -127,85 +131,91 @@ async def upload_file(
     dest.write_bytes(contents)
 
     task = asyncio.create_task(
-        run_pipeline(job_id, file.filename, language, source_file=dest)
+        run_pipeline(game_id, file.filename, language, source_file=dest)
     )
-    job_store.running_tasks[job_id] = task
-    return SubmitJobResponse(job_id=job_id)
+    game_store.running_tasks[game_id] = task
+    return CreateGameResponse(game_id=game_id)
 
 
-@router.post("/jobs", response_model=SubmitJobResponse)
-async def submit_job(req: SubmitJobRequest):
+@router.post("/games", response_model=CreateGameResponse)
+async def create_game(req: CreateGameRequest):
     if req.mode == "reuse_result":
-        # Find a completed job with the same URL and return its job_id directly
-        doc = await mongo.db.jobs.find_one(
+        # Find a completed game with the same URL and return its game_id directly
+        doc = await mongo.db.games.find_one(
             {
                 "video_url": req.video_url,
                 "language": req.language,
-                "result": {"$ne": None},
-                "result.error": None,
+                "analysis": {"$ne": None},
+                "error": None,
             },
             projection={"_id": 1},
         )
         if doc:
-            return SubmitJobResponse(job_id=doc["_id"])
+            return CreateGameResponse(game_id=doc["_id"])
         # No matching result found -- fall through to full run
         req.mode = "full"
 
-    job_id = await job_store.create_job(req.video_url, req.language)
+    game_id = await game_store.create_game(video_url=req.video_url, language=req.language)
     task = asyncio.create_task(
-        run_pipeline(job_id, req.video_url, req.language, mode=req.mode)
+        run_pipeline(game_id, req.video_url, req.language, mode=req.mode)
     )
-    job_store.running_tasks[job_id] = task
-    return SubmitJobResponse(job_id=job_id)
+    game_store.running_tasks[game_id] = task
+    return CreateGameResponse(game_id=game_id)
 
 
-@router.get("/jobs/{job_id}/events")
-async def job_events(job_id: str):
-    if await job_store.get_job(job_id) is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+@router.get("/games/{game_id}/events")
+async def game_events(game_id: str):
+    if await game_store.get_game(game_id) is None:
+        raise HTTPException(status_code=404, detail="Game not found")
 
     async def event_generator():
-        queue = await job_store.subscribe(job_id)
+        queue = await game_store.subscribe(game_id)
         try:
             while True:
                 event = await queue.get()
-                if isinstance(event, JobStatus):
+                if isinstance(event, GameStatus):
                     yield {
                         "event": "status",
                         "data": event.model_dump_json(),
                     }
-                    if event.step in ("done", "failed"):
+                    if event.step in (PipelineStep.done, PipelineStep.failed):
                         # Keep going -- the result event follows
                         continue
-                elif isinstance(event, JobResult):
+                elif isinstance(event, GameResult):
                     yield {
                         "event": "result",
                         "data": event.model_dump_json(),
                     }
                     return
         finally:
-            job_store.unsubscribe(job_id, queue)
+            game_store.unsubscribe(game_id, queue)
 
     return EventSourceResponse(event_generator())
 
 
-@router.get("/jobs/{job_id}")
-async def get_job(job_id: str):
-    doc = await job_store.get_job(job_id)
+@router.get("/games/{game_id}")
+async def get_game(game_id: str):
+    doc = await game_store.get_game(game_id)
     if doc is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail="Game not found")
 
-    status = JobStatus(
-        job_id=job_id,
-        step=PipelineStep(doc["status"]["step"]),
-        detail=doc["status"].get("detail", ""),
+    status = GameStatus(
+        game_id=game_id,
+        step=PipelineStep(doc["upload_status"]["step"]),
+        detail=doc["upload_status"].get("detail", ""),
     )
     response: dict = {"status": status.model_dump()}
-    if doc.get("result") is not None:
-        result = JobResult(
-            job_id=job_id,
-            games=[GameAnalysis.model_validate(g) for g in doc["result"].get("games", [])],
-            error=doc["result"].get("error"),
+    step = PipelineStep(doc["upload_status"]["step"])
+    if step in (PipelineStep.done, PipelineStep.failed):
+        analysis = (
+            GameAnalysis.model_validate(doc["analysis"])
+            if doc.get("analysis")
+            else None
+        )
+        result = GameResult(
+            game_id=game_id,
+            analysis=analysis,
+            error=doc.get("error"),
         )
         response["result"] = result.model_dump()
     return response

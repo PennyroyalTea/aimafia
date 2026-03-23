@@ -39,20 +39,6 @@ def _fmt_time(seconds: float) -> str:
     return f"{m}:{s:02d}"
 
 
-# --- Game splitter models ---
-
-
-class GameBoundary(BaseModel):
-    game_number: int
-    start_utterance: int
-    end_utterance: int  # exclusive
-    title: str = ""
-
-
-class SplitResult(BaseModel):
-    games: list[GameBoundary]
-
-
 # --- Diarization improver models ---
 
 
@@ -76,7 +62,6 @@ class PlayerSummary(BaseModel):
 
 
 class GameSummary(BaseModel):
-    game_number: int
     title: str = ""
     winner: str
     summary: str
@@ -103,15 +88,14 @@ class GameAnalysis(BaseModel):
 class PipelineStep(str, Enum):
     downloading = "downloading"
     transcribing = "transcribing"
-    splitting_games = "splitting_games"
     improving_diarization = "improving_diarization"
-    generating_summaries = "generating_summaries"
+    generating_analysis = "generating_analysis"
     done = "done"
     failed = "failed"
 
 
-class JobStatus(BaseModel):
-    job_id: str
+class GameStatus(BaseModel):
+    game_id: str
     step: PipelineStep
     detail: str = ""
 
@@ -124,14 +108,7 @@ class InterestSubmission(BaseModel):
     comment: str = ""
 
 
-class JobMeta(BaseModel):
-    job_id: str
-    video_url: str
-    language: str
-    created_at: datetime
-
-
-class JobResult(BaseModel):
-    job_id: str
-    games: list[GameAnalysis] = []
+class GameResult(BaseModel):
+    game_id: str
+    analysis: GameAnalysis | None = None
     error: str | None = None

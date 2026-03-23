@@ -3,9 +3,8 @@ import type { PipelineStep } from "../types";
 const STEP_LABELS: Record<PipelineStep, string> = {
   downloading: "Downloading video",
   transcribing: "Transcribing audio",
-  splitting_games: "Splitting into games",
   improving_diarization: "Identifying players",
-  generating_summaries: "Generating analysis",
+  generating_analysis: "Generating analysis",
   done: "Done",
   failed: "Failed",
 };
@@ -13,9 +12,8 @@ const STEP_LABELS: Record<PipelineStep, string> = {
 const STEP_ORDER: PipelineStep[] = [
   "downloading",
   "transcribing",
-  "splitting_games",
   "improving_diarization",
-  "generating_summaries",
+  "generating_analysis",
 ];
 
 interface JobProgressProps {

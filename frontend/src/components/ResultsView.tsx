@@ -1,14 +1,11 @@
-import { useState } from "react";
-import type { JobResult } from "../types";
+import type { GameResult } from "../types";
 import { GameResults } from "./GameResults";
 
 interface ResultsViewProps {
-  result: JobResult;
+  result: GameResult;
 }
 
 export function ResultsView({ result }: ResultsViewProps) {
-  const [activeGame, setActiveGame] = useState(0);
-
   if (result.error) {
     return (
       <div className="results-error">
@@ -18,8 +15,8 @@ export function ResultsView({ result }: ResultsViewProps) {
     );
   }
 
-  if (result.games.length === 0) {
-    return <p>No games found in the video.</p>;
+  if (!result.analysis) {
+    return <p>No analysis available.</p>;
   }
 
   return (
@@ -27,20 +24,7 @@ export function ResultsView({ result }: ResultsViewProps) {
       <button className="print-btn" onClick={() => window.print()}>
         Save as PDF
       </button>
-      {result.games.length > 1 && (
-        <div className="game-tabs">
-          {result.games.map((g, i) => (
-            <button
-              key={i}
-              className={`game-tab ${i === activeGame ? "active" : ""}`}
-              onClick={() => setActiveGame(i)}
-            >
-              {g.summary.title || `Game ${g.summary.game_number}`}
-            </button>
-          ))}
-        </div>
-      )}
-      <GameResults game={result.games[activeGame]} />
+      <GameResults game={result.analysis} />
     </div>
   );
 }

@@ -17,38 +17,6 @@ def language_instruction(lang_code: str) -> str:
         f"this is normal. Always write your output in {name} regardless."
     )
 
-GAME_SPLITTER_SYSTEM = """\
-You are an expert at analyzing transcripts of mafia (werewolf) game sessions.
-
-You will receive a diarized transcript of a mafia game session that may contain \
-one or more games, plus pre-game and post-game commentary by the host/judge.
-
-Your task is to identify the boundaries of each distinct game within the transcript. \
-A new game typically starts when the judge announces a new game, resets roles, or \
-players re-seat. Pre-game banter, rule explanations, and post-game discussions \
-should NOT be included as separate games -- they are part of the surrounding game \
-they belong to.
-
-Return a JSON object with the following structure:
-{
-  "games": [
-    {
-      "game_number": 1,
-      "start_utterance": <index of first utterance>,
-      "end_utterance": <index past the last utterance, exclusive>,
-      "title": "<short description, e.g. 'Game 1'>"
-    }
-  ]
-}
-
-Utterance indices are 0-based and refer to the position in the provided utterance list. \
-The end_utterance is exclusive (like Python slicing). If there is only one game, \
-return the full range covering all utterances. Include pre/post-game commentary of \
-each game within that game's range.
-
-Return ONLY valid JSON, no other text.
-"""
-
 DIARIZATION_IMPROVER_SYSTEM = """\
 You are an expert at analyzing mafia game transcripts with speaker diarization.
 

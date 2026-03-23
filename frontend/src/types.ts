@@ -1,14 +1,13 @@
 export type PipelineStep =
   | "downloading"
   | "transcribing"
-  | "splitting_games"
   | "improving_diarization"
-  | "generating_summaries"
+  | "generating_analysis"
   | "done"
   | "failed";
 
-export interface JobStatus {
-  job_id: string;
+export interface GameStatus {
+  game_id: string;
   step: PipelineStep;
   detail: string;
 }
@@ -20,7 +19,6 @@ export interface PlayerSummary {
 }
 
 export interface GameSummary {
-  game_number: number;
   title: string;
   winner: string;
   summary: string;
@@ -41,8 +39,8 @@ export interface GameAnalysis {
   advice: PersonalAdvice[];
 }
 
-export interface JobResult {
-  job_id: string;
-  games: GameAnalysis[];
+export interface GameResult {
+  game_id: string;
+  analysis: GameAnalysis | null;
   error: string | null;
 }
