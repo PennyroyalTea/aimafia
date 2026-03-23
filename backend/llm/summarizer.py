@@ -32,11 +32,11 @@ def _create_message(
     client: anthropic.Anthropic,
     system: str,
     user_content: str,
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
 ) -> str:
     """Call the API and raise on truncation."""
     msg = client.messages.create(
-        model="claude-sonnet-4-5-20250514",
+        model="claude-opus-4-6",
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
