@@ -68,6 +68,22 @@ export async function uploadGameFile(
   return data.game_id;
 }
 
+export interface GameListItem {
+  game_id: string;
+  video_url: string | null;
+  language: string;
+  created_at: string;
+  status: string;
+}
+
+export async function listGames(): Promise<GameListItem[]> {
+  const res = await fetch(`${API_BASE}/games`);
+  if (!res.ok) {
+    throw new Error(`Failed to list games: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export interface InterestSubmission {
   name: string;
   email: string;

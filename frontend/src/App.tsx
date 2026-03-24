@@ -8,13 +8,14 @@ import {
   uploadGameFile,
   type UrlMatch,
 } from "./api/client";
+import { GamesList } from "./components/GamesList";
 import { JobProgress } from "./components/JobProgress";
 import { LandingPage } from "./components/LandingPage";
 import { ResultsView } from "./components/ResultsView";
 import { UrlInput } from "./components/UrlInput";
 import type { GameResult, PipelineStep } from "./types";
 
-type AppState = "idle" | "choosing" | "processing" | "done" | "error";
+type AppState = "idle" | "browsing" | "choosing" | "processing" | "done" | "error";
 
 function App() {
   // Show landing page on "/" and analyzer on "/app"
@@ -172,6 +173,58 @@ function App() {
     startPipeline(pendingUrl, pendingLanguage, mode);
   };
 
+  const handleSelectGame = useCallback(
+    async (gameId: string) => {
+      setAppState("processing");
+      setCurrentStep("downloading");
+      setStepDetail("Loading game...");
+      setResult(null);
+      setError("");
+
+      try {
+        const gameData = await getGame(gameId);
+        if (gameData.result && !gameData.result.error) {
+          setResult(gameData.result);
+          setAppState("done");
+        } else if (gameData.result?.error) {
+          setAppState("error");
+          setError(gameData.result.error);
+        } else {
+          // Still processing -- subscribe to SSE
+          const unsub = subscribeToGame(
+            gameId,
+            (status) => {
+              setCurrentStep(status.step);
+              setStepDetail(status.detail);
+              if (status.step === "failed") {
+                setAppState("error");
+                setError(status.detail || "Pipeline failed");
+              }
+            },
+            (gameResult) => {
+              if (gameResult.error) {
+                setAppState("error");
+                setError(gameResult.error);
+              } else {
+                setResult(gameResult);
+                setAppState("done");
+              }
+            },
+            (err) => {
+              setAppState("error");
+              setError(err.message);
+            }
+          );
+          unsubRef.current = unsub;
+        }
+      } catch (err) {
+        setAppState("error");
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    []
+  );
+
   const handleReset = () => {
     unsubRef.current?.();
     unsubRef.current = null;
@@ -194,10 +247,30 @@ function App() {
         Analyze mafia game videos with AI-powered transcription and coaching
       </p>
 
-      <UrlInput
-        onSubmit={handleSubmit}
-        disabled={appState === "processing" || appState === "choosing"}
-      />
+      {appState !== "browsing" && (
+        <>
+          <UrlInput
+            onSubmit={handleSubmit}
+            disabled={appState === "processing" || appState === "choosing"}
+          />
+
+          {appState === "idle" && (
+            <button
+              className="browse-games-link"
+              onClick={() => setAppState("browsing")}
+            >
+              View all games
+            </button>
+          )}
+        </>
+      )}
+
+      {appState === "browsing" && (
+        <GamesList
+          onSelect={handleSelectGame}
+          onBack={handleReset}
+        />
+      )}
 
       {appState === "choosing" && (
         <div className="choice-dialog">

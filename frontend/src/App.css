@@ -114,6 +114,118 @@ h1 {
   cursor: not-allowed;
 }
 
+/* Browse games link */
+.browse-games-link {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.browse-games-link:hover {
+  color: #646cff;
+}
+
+/* Games list */
+.games-list {
+  margin: 1rem 0;
+}
+
+.games-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.games-list-header h3 {
+  margin: 0;
+}
+
+.games-list-back {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  padding: 0.4em 1em;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.games-list-back:hover {
+  border-color: #646cff;
+  color: #ccc;
+}
+
+.games-list-loading {
+  color: #888;
+  margin: 2rem 0;
+}
+
+.games-list-empty {
+  color: #888;
+}
+
+.games-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.games-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #444;
+  color: #888;
+  font-weight: 600;
+}
+
+.games-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #333;
+}
+
+.games-source {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-row-clickable {
+  cursor: pointer;
+}
+
+.games-row-clickable:hover {
+  background: rgba(100, 108, 255, 0.08);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.status-done {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-failed {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.status-progress {
+  background: rgba(100, 108, 255, 0.2);
+  color: #646cff;
+}
+
 /* Choice Dialog */
 .choice-dialog {
   margin: 2rem 0;
@@ -447,6 +559,8 @@ h1 {
   .url-input,
   .job-progress,
   .choice-dialog,
+  .games-list,
+  .browse-games-link,
   .reset-btn,
   .print-btn,
   .subtitle,
@@ -562,5 +676,18 @@ h1 {
 
   .error-box pre {
     color: #333;
+  }
+
+  .games-table th {
+    border-bottom-color: #ccc;
+  }
+
+  .games-table td {
+    border-bottom-color: #eee;
+  }
+
+  .games-list-back {
+    border-color: #ccc;
+    color: #666;
   }
 }
