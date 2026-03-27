@@ -20,15 +20,23 @@ export function ResultsView({ result, onReanalyze }: ResultsViewProps) {
       const res = await fetch(`/api/games/${result.game_id}/pdf`, {
         credentials: "include",
       });
-      if (!res.ok) throw new Error("PDF generation failed");
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText);
+        throw new Error(`PDF generation failed: ${text}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download =
         (result.analysis?.summary.title || "game-analysis") + ".pdf";
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert(err instanceof Error ? err.message : "PDF export failed");
     } finally {
       setSavingPdf(false);
     }
