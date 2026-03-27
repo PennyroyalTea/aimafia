@@ -10,5 +10,22 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Invert favicon colors on staging
+      if (location.hostname !== 'mafiaclub.cc') {
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          var ctx = c.getContext('2d');
+          ctx.filter = 'invert(1)';
+          ctx.drawImage(img, 0, 0);
+          var link = document.querySelector("link[rel='icon']");
+          link.href = c.toDataURL('image/png');
+        };
+        img.src = '/favicon.png';
+        document.title = '[STG] ' + document.title;
+      }
+    </script>
   </body>
 </html>
