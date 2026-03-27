@@ -12,6 +12,8 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel
 
+from backend import mongo
+
 router = APIRouter(prefix="/auth")
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days in seconds
@@ -73,6 +75,16 @@ async def google_login(body: GoogleTokenRequest, response: Response):
 
     email = idinfo.get("email", "")
     name = idinfo.get("name", email)
+
+    # Upsert user in database
+    await mongo.db.users.update_one(
+        {"email": email},
+        {
+            "$set": {"name": name, "last_login": datetime.now(timezone.utc)},
+            "$setOnInsert": {"email": email, "created_at": datetime.now(timezone.utc)},
+        },
+        upsert=True,
+    )
 
     session_token = _create_session_jwt(email, name)
     response.set_cookie(
