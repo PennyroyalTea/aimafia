@@ -102,29 +102,21 @@ export async function exportPdf(
 ): Promise<void> {
   const html2pdf = (await import("html2pdf.js")).default;
 
-  const container = document.createElement("div");
-  container.style.cssText = `
-    position: fixed; top: 0; left: 0; width: 794px;
+  const wrappedHtml = `<div style="
     background: white; color: #1a1a1a; padding: 40px;
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    line-height: 1.5; z-index: -1;
-  `;
-  container.innerHTML = buildPdfHtml(game);
-  document.body.appendChild(container);
+    line-height: 1.5;
+  ">${buildPdfHtml(game)}</div>`;
 
-  try {
-    await html2pdf()
-      .set({
-        margin: 0,
-        filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css"] },
-      } as Record<string, unknown>)
-      .from(container)
-      .save();
-  } finally {
-    document.body.removeChild(container);
-  }
+  await html2pdf()
+    .set({
+      margin: 0,
+      filename,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["css"] },
+    } as Record<string, unknown>)
+    .from(wrappedHtml)
+    .save();
 }
