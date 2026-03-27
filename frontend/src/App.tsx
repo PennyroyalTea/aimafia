@@ -1,16 +1,20 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
+  checkAuth,
   checkUrl,
   createGame,
   getGame,
+  logout,
   subscribeToGame,
   uploadGameFile,
+  type AuthUser,
   type UrlMatch,
 } from "./api/client";
 import { GamesList } from "./components/GamesList";
 import { JobProgress } from "./components/JobProgress";
 import { LandingPage } from "./components/LandingPage";
+import { LoginPage } from "./components/LoginPage";
 import { ResultsView } from "./components/ResultsView";
 import { UrlInput } from "./components/UrlInput";
 import type { GameResult, PipelineStep } from "./types";
@@ -23,6 +27,35 @@ function App() {
     return <LandingPage />;
   }
 
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    checkAuth().then((u) => {
+      setUser(u);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    setUser(null);
+  };
+
+  if (!authChecked) return null;
+
+  if (!user) {
+    return <LoginPage onLogin={setUser} />;
+  }
+
+  return <AnalyzerApp user={user} onLogout={handleLogout} />;
+}
+
+function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [appState, setAppState] = useState<AppState>("idle");
   const [currentStep, setCurrentStep] = useState<PipelineStep>("downloading");
   const [stepDetail, setStepDetail] = useState("");
@@ -242,10 +275,20 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Mafia Game Analyzer</h1>
-      <p className="subtitle">
-        Analyze mafia game videos with AI-powered transcription and coaching
-      </p>
+      <div className="app-header">
+        <div>
+          <h1>Mafia Game Analyzer</h1>
+          <p className="subtitle">
+            Analyze mafia game videos with AI-powered transcription and coaching
+          </p>
+        </div>
+        <div className="user-info">
+          <span className="user-name">{user.name}</span>
+          <button className="logout-btn" onClick={onLogout}>
+            Sign out
+          </button>
+        </div>
+      </div>
 
       {appState !== "browsing" && (
         <>

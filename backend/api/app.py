@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv(override=True)
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.auth import router as auth_router
 from backend.api.games import game_store
 from backend.api.routes import router
 from backend.mongo import close_db, init_db
@@ -34,12 +35,13 @@ app = FastAPI(title="Mafia Game Analyzer", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://localhost:8000", "https://mafiaclub.cc"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(router, prefix="/api")
 
 # Serve frontend static files (production build)

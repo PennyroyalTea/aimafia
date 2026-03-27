@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from backend.api.auth import UserInfo, require_auth
 from backend.api.games import game_store, run_pipeline
 from backend import mongo
 from backend.models import GameAnalysis, GameResult, GameStatus, InterestSubmission, PipelineStep
@@ -54,13 +55,13 @@ async def submit_interest(submission: InterestSubmission):
 
 
 @router.get("/interests", response_model=list[InterestSubmission])
-async def list_interests():
+async def list_interests(_user: UserInfo = Depends(require_auth)):
     docs = await mongo.db.interests.find().to_list(None)
     return [InterestSubmission.model_validate(doc) for doc in docs]
 
 
 @router.get("/check-url", response_model=list[UrlMatch])
-async def check_url(url: str = Query(...), language: str = Query("ru")):
+async def check_url(url: str = Query(...), language: str = Query("ru"), _user: UserInfo = Depends(require_auth)):
     docs = await mongo.db.games.find(
         {
             "video_url": url,
@@ -87,7 +88,7 @@ async def check_url(url: str = Query(...), language: str = Query("ru")):
 
 
 @router.get("/games", response_model=list[GameListItem])
-async def list_games():
+async def list_games(_user: UserInfo = Depends(require_auth)):
     docs = await mongo.db.games.find(
         {},
         projection={"video_url": 1, "source_filename": 1, "language": 1, "created_at": 1, "upload_status": 1},
@@ -115,6 +116,7 @@ async def list_games():
 async def upload_file(
     file: UploadFile,
     language: str = Form("ru"),
+    _user: UserInfo = Depends(require_auth),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
@@ -138,7 +140,7 @@ async def upload_file(
 
 
 @router.post("/games", response_model=CreateGameResponse)
-async def create_game(req: CreateGameRequest):
+async def create_game(req: CreateGameRequest, _user: UserInfo = Depends(require_auth)):
     if req.mode == "reuse_result":
         # Find a completed game with the same URL and return its game_id directly
         doc = await mongo.db.games.find_one(
@@ -164,7 +166,7 @@ async def create_game(req: CreateGameRequest):
 
 
 @router.get("/games/{game_id}/events")
-async def game_events(game_id: str):
+async def game_events(game_id: str, _user: UserInfo = Depends(require_auth)):
     if await game_store.get_game(game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
 
@@ -194,7 +196,7 @@ async def game_events(game_id: str):
 
 
 @router.get("/games/{game_id}")
-async def get_game(game_id: str):
+async def get_game(game_id: str, _user: UserInfo = Depends(require_auth)):
     doc = await game_store.get_game(game_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Game not found")

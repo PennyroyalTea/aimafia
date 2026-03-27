@@ -4,6 +4,7 @@ __pycache__/
 dist/
 build/
 .env
+frontend/.env
 *.mp3
 *.wav
 *.mp4

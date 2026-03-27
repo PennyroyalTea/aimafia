@@ -2,6 +2,43 @@ import type { GameResult, GameStatus } from "../types";
 
 const API_BASE = "/api";
 
+export interface AuthUser {
+  email: string;
+  name: string;
+}
+
+export async function checkAuth(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function loginWithGoogle(credential: string): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Login failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
 export interface UrlMatch {
   game_id: string;
   language: string;
@@ -15,7 +52,8 @@ export async function checkUrl(
   language: string
 ): Promise<UrlMatch[]> {
   const res = await fetch(
-    `${API_BASE}/check-url?url=${encodeURIComponent(url)}&language=${encodeURIComponent(language)}`
+    `${API_BASE}/check-url?url=${encodeURIComponent(url)}&language=${encodeURIComponent(language)}`,
+    { credentials: "include" }
   );
   if (!res.ok) {
     throw new Error(`Failed to check URL: ${res.statusText}`);
@@ -32,6 +70,7 @@ export async function createGame(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ video_url: videoUrl, language, mode }),
+    credentials: "include",
   });
   if (!res.ok) {
     throw new Error(`Failed to create game: ${res.statusText}`);
@@ -43,7 +82,9 @@ export async function createGame(
 export async function getGame(
   gameId: string
 ): Promise<{ status: GameStatus; result?: GameResult }> {
-  const res = await fetch(`${API_BASE}/games/${gameId}`);
+  const res = await fetch(`${API_BASE}/games/${gameId}`, {
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new Error(`Failed to get game: ${res.statusText}`);
   }
@@ -60,6 +101,7 @@ export async function uploadGameFile(
   const res = await fetch(`${API_BASE}/games/upload`, {
     method: "POST",
     body: form,
+    credentials: "include",
   });
   if (!res.ok) {
     throw new Error(`Failed to upload file: ${res.statusText}`);
@@ -77,7 +119,9 @@ export interface GameListItem {
 }
 
 export async function listGames(): Promise<GameListItem[]> {
-  const res = await fetch(`${API_BASE}/games`);
+  const res = await fetch(`${API_BASE}/games`, {
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new Error(`Failed to list games: ${res.statusText}`);
   }
@@ -111,7 +155,9 @@ export function subscribeToGame(
   onResult: (result: GameResult) => void,
   onError: (error: Error) => void
 ): () => void {
-  const es = new EventSource(`${API_BASE}/games/${gameId}/events`);
+  const es = new EventSource(`${API_BASE}/games/${gameId}/events`, {
+    withCredentials: true,
+  });
 
   es.addEventListener("status", (e) => {
     const status: GameStatus = JSON.parse(e.data);
