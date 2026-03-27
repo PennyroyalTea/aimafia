@@ -174,8 +174,8 @@ h1 {
 
 .file-upload-btn {
   flex: 1;
-  background: #1a1a1a;
-  border: 1px dashed #555;
+  background: transparent;
+  border: 1px dashed #666;
   color: #aaa;
   cursor: pointer;
   font-size: 0.95em;
@@ -185,7 +185,7 @@ h1 {
 
 .file-upload-btn:hover {
   border-color: #646cff;
-  color: #ccc;
+  color: #ddd;
 }
 
 .file-upload-btn:disabled {
