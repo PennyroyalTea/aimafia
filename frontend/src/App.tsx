@@ -63,7 +63,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
   const unsubRef = useRef<(() => void) | null>(null);
 
   const handleSubmit = useCallback(
-    async (file: File, language: string, gameContext: string) => {
+    async (file: File, language: string, gameContext: string, model: string) => {
       setAppState("processing");
       setCurrentStep("downloading");
       setStepDetail("Uploading file...");
@@ -71,7 +71,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
       setError("");
 
       try {
-        const gameId = await uploadGameFile(file, language, gameContext);
+        const gameId = await uploadGameFile(file, language, gameContext, model);
         setCurrentGameId(gameId);
 
         const unsub = subscribeToGame(
@@ -162,7 +162,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
   );
 
   const handleReanalyze = useCallback(
-    async (gameContext: string) => {
+    async (gameContext: string, model: string) => {
       if (!currentGameId) return;
 
       setAppState("processing");
@@ -172,7 +172,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
       setError("");
 
       try {
-        const gameId = await reanalyzeGame(currentGameId, gameContext);
+        const gameId = await reanalyzeGame(currentGameId, gameContext, model);
 
         const unsub = subscribeToGame(
           gameId,

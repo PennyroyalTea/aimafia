@@ -54,7 +54,8 @@ export async function getGame(
 export async function uploadGameFile(
   file: File,
   language: string = "ru",
-  gameContext: string = ""
+  gameContext: string = "",
+  model: string = "claude-sonnet-4-6"
 ): Promise<string> {
   const form = new FormData();
   form.append("file", file);
@@ -62,6 +63,7 @@ export async function uploadGameFile(
   if (gameContext) {
     form.append("game_context", gameContext);
   }
+  form.append("model", model);
   const res = await fetch(`${API_BASE}/games/upload`, {
     method: "POST",
     body: form,
@@ -76,12 +78,13 @@ export async function uploadGameFile(
 
 export async function reanalyzeGame(
   gameId: string,
-  gameContext: string
+  gameContext: string,
+  model: string = "claude-sonnet-4-6"
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/games/${gameId}/reanalyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ game_context: gameContext }),
+    body: JSON.stringify({ game_context: gameContext, model }),
     credentials: "include",
   });
   if (!res.ok) {

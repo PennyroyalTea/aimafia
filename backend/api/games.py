@@ -148,6 +148,7 @@ async def run_pipeline(
     language: str,
     source_file: Path,
     game_context: str = "",
+    model: str = "claude-sonnet-4-6",
 ) -> None:
     """Run the full analysis pipeline for a game."""
     loop = asyncio.get_running_loop()
@@ -203,7 +204,7 @@ async def run_pipeline(
             "Identifying players...",
         )
         improved = await asyncio.to_thread(
-            improve_diarization, transcript.utterances
+            improve_diarization, transcript.utterances, model
         )
         n_players = len(
             [m for m in improved.mappings if m.resolved_name != "Judge"]
@@ -223,7 +224,7 @@ async def run_pipeline(
             "Generating game analysis...",
         )
         analysis = await asyncio.to_thread(
-            generate_game_analysis, improved, 1, language, game_context
+            generate_game_analysis, improved, 1, language, game_context, model
         )
         await mongo.db.games.update_one(
             {"_id": game_id},
@@ -259,6 +260,7 @@ async def run_reanalysis(
     game_id: str,
     language: str,
     game_context: str = "",
+    model: str = "claude-sonnet-4-6",
 ) -> None:
     """Re-run only the analysis step using existing transcript + diarization."""
     try:
@@ -273,7 +275,7 @@ async def run_reanalysis(
             "Re-generating analysis with new context...",
         )
         analysis = await asyncio.to_thread(
-            generate_game_analysis, improved, 1, language, game_context
+            generate_game_analysis, improved, 1, language, game_context, model
         )
         await mongo.db.games.update_one(
             {"_id": game_id},

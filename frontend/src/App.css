@@ -672,8 +672,14 @@ h1 {
   border-top: 1px solid #333;
 }
 
-.reanalyze-btn {
+.reanalyze-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
   margin-top: 0.5rem;
+}
+
+.reanalyze-btn {
   padding: 0.5em 1.2em;
   background: #646cff;
   color: white;

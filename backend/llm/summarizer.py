@@ -33,11 +33,12 @@ def _create_message(
     system: str,
     user_content: str,
     max_tokens: int = 32768,
+    model: str = "claude-sonnet-4-6",
 ) -> str:
     """Call the API via streaming to avoid SDK timeout on long requests."""
     chunks: list[str] = []
     with client.messages.stream(
-        model="claude-opus-4-6",
+        model=model,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
@@ -58,6 +59,7 @@ def generate_game_analysis(
     game_number: int,
     language: str = "ru",
     game_context: str = "",
+    model: str = "claude-sonnet-4-6",
 ) -> GameAnalysis:
     """Generate full game analysis: summary + personal advice.
 
@@ -91,6 +93,7 @@ def generate_game_analysis(
             f"Transcript:\n\n{transcript_text}"
             + context_block
         ),
+        model=model,
     )
     summary_data = extract_json(summary_text)
     summary = GameSummary.model_validate(summary_data)
@@ -104,6 +107,7 @@ def generate_game_analysis(
             f"Game summary:\n{json.dumps(summary_data, ensure_ascii=False)}"
             + context_block
         ),
+        model=model,
     )
     advice_data = extract_json(advice_text)
     advice_list = [

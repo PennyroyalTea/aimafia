@@ -11,7 +11,7 @@ from backend.llm.prompts import DIARIZATION_IMPROVER_SYSTEM
 from backend.models import ImprovedTranscript, Utterance
 
 
-def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
+def improve_diarization(utterances: list[Utterance], model: str = "claude-sonnet-4-6") -> ImprovedTranscript:
     """Map generic speaker IDs to player identities using context clues.
 
     Args:
@@ -30,7 +30,7 @@ def improve_diarization(utterances: list[Utterance]) -> ImprovedTranscript:
 
     chunks: list[str] = []
     with client.messages.stream(
-        model="claude-opus-4-6",
+        model=model,
         max_tokens=4096,
         system=DIARIZATION_IMPROVER_SYSTEM,
         messages=[

@@ -3,12 +3,13 @@ import { useRef, useState } from "react";
 const ACCEPTED_FORMATS = ".mp3,.wav,.m4a,.ogg,.mp4,.webm,.mkv";
 
 interface UrlInputProps {
-  onSubmit: (file: File, language: string, gameContext: string) => void;
+  onSubmit: (file: File, language: string, gameContext: string, model: string) => void;
   disabled: boolean;
 }
 
 export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
   const [language, setLanguage] = useState("ru");
+  const [model, setModel] = useState("claude-sonnet-4-6");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [gameContext, setGameContext] = useState("");
   const [contextOpen, setContextOpen] = useState(false);
@@ -17,7 +18,7 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFile) {
-      onSubmit(selectedFile, language, gameContext);
+      onSubmit(selectedFile, language, gameContext, model);
     }
   };
 
@@ -75,6 +76,14 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
           <option value="ru">Russian</option>
           <option value="en">English</option>
           <option value="uk">Ukrainian</option>
+        </select>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={disabled}
+        >
+          <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+          <option value="claude-opus-4-6">Opus 4.6</option>
         </select>
         <button type="submit" disabled={disabled || !selectedFile}>
           Analyze

@@ -75,6 +75,7 @@ async def upload_file(
     file: UploadFile,
     language: str = Form("ru"),
     game_context: str = Form(""),
+    model: str = Form("claude-sonnet-4-6"),
     _user: UserInfo = Depends(require_auth),
 ):
     if not file.filename:
@@ -92,7 +93,7 @@ async def upload_file(
     dest.write_bytes(contents)
 
     task = asyncio.create_task(
-        run_pipeline(game_id, language, source_file=dest, game_context=game_context)
+        run_pipeline(game_id, language, source_file=dest, game_context=game_context, model=model)
     )
     game_store.running_tasks[game_id] = task
     return CreateGameResponse(game_id=game_id)
@@ -100,6 +101,7 @@ async def upload_file(
 
 class ReanalyzeRequest(BaseModel):
     game_context: str = ""
+    model: str = "claude-sonnet-4-6"
 
 
 @router.post("/games/{game_id}/reanalyze", response_model=CreateGameResponse)
@@ -122,7 +124,7 @@ async def reanalyze_game(
     )
 
     task = asyncio.create_task(
-        run_reanalysis(game_id, doc["language"], game_context=body.game_context)
+        run_reanalysis(game_id, doc["language"], game_context=body.game_context, model=body.model)
     )
     game_store.running_tasks[game_id] = task
     return CreateGameResponse(game_id=game_id)
