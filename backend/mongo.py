@@ -17,6 +17,7 @@ async def init_db() -> None:
     _client = AsyncIOMotorClient(mongo_url)
     db = _client["mafia"]
     await db.games.create_index([("video_url", 1), ("language", 1)])
+    await db.games.create_index([("audio_hash", 1), ("language", 1)])
 
 
 async def close_db() -> None:

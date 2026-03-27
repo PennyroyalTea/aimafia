@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import shutil
 from datetime import datetime, timezone
@@ -137,6 +138,24 @@ class GameStore:
             return Transcript.model_validate(doc["transcript"])
         return None
 
+    async def find_cached_transcript_by_hash(
+        self, audio_hash: str, language: str, exclude_game_id: str,
+    ) -> Transcript | None:
+        """Find a saved transcript from a previous game with the same audio hash and language."""
+        doc = await mongo.db.games.find_one(
+            {
+                "_id": {"$ne": exclude_game_id},
+                "audio_hash": audio_hash,
+                "language": language,
+                "transcript": {"$ne": None},
+                "error": None,
+            },
+            projection={"transcript": 1},
+        )
+        if doc and doc.get("transcript"):
+            return Transcript.model_validate(doc["transcript"])
+        return None
+
 
 game_store = GameStore()
 
@@ -200,20 +219,43 @@ async def run_pipeline(
                     lambda detail: _progress(PipelineStep.downloading, detail),
                 )
 
-            # Step 2: Transcribe
-            await game_store.update_status(
-                game_id, PipelineStep.transcribing,
-                "Sending audio to ElevenLabs (no progress available)...",
+            # Compute content hash for transcript caching
+            audio_hash = await asyncio.to_thread(
+                lambda: hashlib.sha256(audio_path.read_bytes()).hexdigest()
             )
-            transcript = await asyncio.to_thread(transcribe, audio_path, language)
             await mongo.db.games.update_one(
-                {"_id": game_id},
-                {"$set": {"transcript": transcript.model_dump()}},
+                {"_id": game_id}, {"$set": {"audio_hash": audio_hash}},
             )
-            await game_store.update_status(
-                game_id, PipelineStep.transcribing,
-                f"Done -- {len(transcript.utterances)} utterances",
+
+            # Check for cached transcript by content hash
+            cached = await game_store.find_cached_transcript_by_hash(
+                audio_hash, language, game_id,
             )
+            if cached is not None:
+                transcript = cached
+                await mongo.db.games.update_one(
+                    {"_id": game_id},
+                    {"$set": {"transcript": transcript.model_dump()}},
+                )
+                await game_store.update_status(
+                    game_id, PipelineStep.transcribing,
+                    f"Reusing cached transcript ({len(transcript.utterances)} utterances)",
+                )
+            else:
+                # Step 2: Transcribe
+                await game_store.update_status(
+                    game_id, PipelineStep.transcribing,
+                    "Sending audio to ElevenLabs (no progress available)...",
+                )
+                transcript = await asyncio.to_thread(transcribe, audio_path, language)
+                await mongo.db.games.update_one(
+                    {"_id": game_id},
+                    {"$set": {"transcript": transcript.model_dump()}},
+                )
+                await game_store.update_status(
+                    game_id, PipelineStep.transcribing,
+                    f"Done -- {len(transcript.utterances)} utterances",
+                )
 
         # Step 3: Improve diarization on full transcript
         await game_store.update_status(
