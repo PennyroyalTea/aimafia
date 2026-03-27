@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { GameResult } from "../types";
-import { exportPdf } from "../utils/pdfExport";
 import { GameResults } from "./GameResults";
 
 interface ResultsViewProps {
@@ -15,11 +14,21 @@ export function ResultsView({ result, onReanalyze }: ResultsViewProps) {
   const [savingPdf, setSavingPdf] = useState(false);
 
   const handleSavePdf = async () => {
-    if (!result.analysis) return;
+    if (!result.game_id) return;
     setSavingPdf(true);
     try {
-      const title = result.analysis.summary.title || "game-analysis";
-      await exportPdf(result.analysis, `${title}.pdf`);
+      const res = await fetch(`/api/games/${result.game_id}/pdf`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        (result.analysis?.summary.title || "game-analysis") + ".pdf";
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setSavingPdf(false);
     }

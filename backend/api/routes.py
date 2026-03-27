@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -15,6 +16,7 @@ from backend.api.auth import UserInfo, require_auth
 from backend.api.games import game_store, run_pipeline, run_reanalysis
 from backend import mongo
 from backend.models import GameAnalysis, GameResult, GameStatus, InterestSubmission, PipelineStep
+from backend.pdf_export import generate_pdf
 
 router = APIRouter()
 
@@ -158,6 +160,25 @@ async def game_events(game_id: str, _user: UserInfo = Depends(require_auth)):
             game_store.unsubscribe(game_id, queue)
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/games/{game_id}/pdf")
+async def get_game_pdf(game_id: str, _user: UserInfo = Depends(require_auth)):
+    doc = await game_store.get_game(game_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if not doc.get("analysis"):
+        raise HTTPException(status_code=400, detail="Game has no analysis yet")
+
+    analysis = GameAnalysis.model_validate(doc["analysis"])
+    pdf_bytes = generate_pdf(analysis)
+    filename = analysis.summary.title or "game-analysis"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
 
 
 @router.get("/games/{game_id}")
