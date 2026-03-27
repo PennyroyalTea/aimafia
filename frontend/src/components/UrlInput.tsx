@@ -3,12 +3,11 @@ import { useRef, useState } from "react";
 const ACCEPTED_FORMATS = ".mp3,.wav,.m4a,.ogg,.mp4,.webm,.mkv";
 
 interface UrlInputProps {
-  onSubmit: (url: string, language: string, file?: File) => void;
+  onSubmit: (file: File, language: string) => void;
   disabled: boolean;
 }
 
 export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
-  const [url, setUrl] = useState("");
   const [language, setLanguage] = useState("ru");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,9 +15,7 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFile) {
-      onSubmit("", language, selectedFile);
-    } else if (url.trim()) {
-      onSubmit(url.trim(), language);
+      onSubmit(selectedFile, language);
     }
   };
 
@@ -26,7 +23,6 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setUrl("");
     }
   };
 
@@ -36,8 +32,6 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
       fileInputRef.current.value = "";
     }
   };
-
-  const canSubmit = selectedFile || url.trim();
 
   return (
     <form onSubmit={handleSubmit} className="url-input">
@@ -55,14 +49,22 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
             </button>
           </div>
         ) : (
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="YouTube video URL..."
+          <button
+            type="button"
+            className="file-upload-btn"
+            onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-          />
+          >
+            Choose audio file
+          </button>
         )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_FORMATS}
+          onChange={handleFileChange}
+          hidden
+        />
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
@@ -72,29 +74,10 @@ export function UrlInput({ onSubmit, disabled }: UrlInputProps) {
           <option value="en">English</option>
           <option value="uk">Ukrainian</option>
         </select>
-        <button type="submit" disabled={disabled || !canSubmit}>
+        <button type="submit" disabled={disabled || !selectedFile}>
           Analyze
         </button>
       </div>
-      {!selectedFile && (
-        <div className="file-upload-row">
-          <button
-            type="button"
-            className="file-upload-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-          >
-            or upload a file
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED_FORMATS}
-            onChange={handleFileChange}
-            hidden
-          />
-        </div>
-      )}
     </form>
   );
 }

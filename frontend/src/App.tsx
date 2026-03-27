@@ -2,14 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   checkAuth,
-  checkUrl,
-  createGame,
   getGame,
   logout,
   subscribeToGame,
   uploadGameFile,
   type AuthUser,
-  type UrlMatch,
 } from "./api/client";
 import { GamesList } from "./components/GamesList";
 import { JobProgress } from "./components/JobProgress";
@@ -19,7 +16,7 @@ import { ResultsView } from "./components/ResultsView";
 import { UrlInput } from "./components/UrlInput";
 import type { GameResult, PipelineStep } from "./types";
 
-type AppState = "idle" | "browsing" | "choosing" | "processing" | "done" | "error";
+type AppState = "idle" | "browsing" | "processing" | "done" | "error";
 
 function App() {
   // Show landing page on "/" and analyzer on "/app"
@@ -63,70 +60,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
   const [error, setError] = useState<string>("");
   const unsubRef = useRef<(() => void) | null>(null);
 
-  // State for the choice dialog
-  const [pendingUrl, setPendingUrl] = useState("");
-  const [pendingLanguage, setPendingLanguage] = useState("");
-  const [urlMatches, setUrlMatches] = useState<UrlMatch[]>([]);
-
-  const startPipeline = useCallback(
-    async (url: string, language: string, mode: string) => {
-      setAppState("processing");
-      setCurrentStep(mode === "reuse_transcript" ? "improving_diarization" : "downloading");
-      setStepDetail("");
-      setResult(null);
-      setError("");
-
-      try {
-        const gameId = await createGame(url, language, mode);
-
-        if (mode === "reuse_result") {
-          // Game already completed -- fetch result directly
-          const gameData = await getGame(gameId);
-          if (gameData.result && !gameData.result.error) {
-            setResult(gameData.result);
-            setAppState("done");
-          } else {
-            setAppState("error");
-            setError(gameData.result?.error || "No result available");
-          }
-          return;
-        }
-
-        const unsub = subscribeToGame(
-          gameId,
-          (status) => {
-            setCurrentStep(status.step);
-            setStepDetail(status.detail);
-            if (status.step === "failed") {
-              setAppState("error");
-              setError(status.detail || "Pipeline failed");
-            }
-          },
-          (gameResult) => {
-            if (gameResult.error) {
-              setAppState("error");
-              setError(gameResult.error);
-            } else {
-              setResult(gameResult);
-              setAppState("done");
-            }
-          },
-          (err) => {
-            setAppState("error");
-            setError(err.message);
-          }
-        );
-
-        unsubRef.current = unsub;
-      } catch (err) {
-        setAppState("error");
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    []
-  );
-
-  const startFileUpload = useCallback(
+  const handleSubmit = useCallback(
     async (file: File, language: string) => {
       setAppState("processing");
       setCurrentStep("downloading");
@@ -170,41 +104,6 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
     },
     []
   );
-
-  const handleSubmit = useCallback(
-    async (url: string, language: string, file?: File) => {
-      if (file) {
-        startFileUpload(file, language);
-        return;
-      }
-
-      setResult(null);
-      setError("");
-
-      try {
-        const matches = await checkUrl(url, language);
-        const relevant = matches.filter((m) => m.has_result || m.has_transcript);
-
-        if (relevant.length > 0) {
-          setPendingUrl(url);
-          setPendingLanguage(language);
-          setUrlMatches(relevant);
-          setAppState("choosing");
-        } else {
-          startPipeline(url, language, "full");
-        }
-      } catch {
-        // check-url failed -- just proceed with full run
-        startPipeline(url, language, "full");
-      }
-    },
-    [startPipeline, startFileUpload]
-  );
-
-  const handleChoice = (mode: string) => {
-    setUrlMatches([]);
-    startPipeline(pendingUrl, pendingLanguage, mode);
-  };
 
   const handleSelectGame = useCallback(
     async (gameId: string) => {
@@ -264,14 +163,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
     setAppState("idle");
     setResult(null);
     setError("");
-    setUrlMatches([]);
   };
-
-  const lastProcessed = urlMatches.length > 0 ? urlMatches[0].created_at : "";
-  const hasTranscript = urlMatches.some((m) => m.has_transcript);
-  const hasResult = urlMatches.some(
-    (m) => m.has_result && m.language === pendingLanguage
-  );
 
   return (
     <div className="app">
@@ -294,7 +186,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
         <>
           <UrlInput
             onSubmit={handleSubmit}
-            disabled={appState === "processing" || appState === "choosing"}
+            disabled={appState === "processing"}
           />
 
           {appState === "idle" && (
@@ -315,42 +207,6 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
         />
       )}
 
-      {appState === "choosing" && (
-        <div className="choice-dialog">
-          <h3>This URL was already processed</h3>
-          <p className="choice-detail">
-            Last analyzed: {new Date(lastProcessed).toLocaleString()}
-          </p>
-          <div className="choice-buttons">
-            {hasResult && (
-              <button
-                className="choice-btn choice-reuse-result"
-                onClick={() => handleChoice("reuse_result")}
-              >
-                View previous results
-              </button>
-            )}
-            {hasTranscript && (
-              <button
-                className="choice-btn choice-reuse-transcript"
-                onClick={() => handleChoice("reuse_transcript")}
-              >
-                Re-analyze (reuse transcript)
-              </button>
-            )}
-            <button
-              className="choice-btn choice-full"
-              onClick={() => handleChoice("full")}
-            >
-              Re-analyze from scratch
-            </button>
-            <button className="choice-btn choice-cancel" onClick={handleReset}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {appState === "processing" && (
         <JobProgress currentStep={currentStep} detail={stepDetail} />
       )}
@@ -367,7 +223,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
         <>
           <ResultsView result={result} />
           <button className="reset-btn" onClick={handleReset}>
-            Analyze another video
+            Analyze another game
           </button>
         </>
       )}

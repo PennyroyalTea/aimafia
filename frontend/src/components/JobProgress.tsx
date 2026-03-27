@@ -1,7 +1,7 @@
 import type { PipelineStep } from "../types";
 
 const STEP_LABELS: Record<PipelineStep, string> = {
-  downloading: "Downloading video",
+  downloading: "Preparing audio",
   transcribing: "Transcribing audio",
   improving_diarization: "Identifying players",
   generating_analysis: "Generating analysis",

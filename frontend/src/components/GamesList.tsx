@@ -18,16 +18,7 @@ function statusBadgeClass(status: string): string {
 }
 
 function formatSource(item: GameListItem): string {
-  if (!item.video_url) return "(uploaded file)";
-  try {
-    const url = new URL(item.video_url);
-    const path = url.pathname;
-    const filename = path.split("/").pop();
-    if (filename) return filename;
-  } catch {
-    // not a valid URL, use as-is
-  }
-  return item.video_url;
+  return item.source_filename || "(unknown)";
 }
 
 export function GamesList({ onSelect, onBack }: GamesListProps) {

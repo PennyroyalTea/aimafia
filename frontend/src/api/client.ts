@@ -39,46 +39,6 @@ export async function logout(): Promise<void> {
   });
 }
 
-export interface UrlMatch {
-  game_id: string;
-  language: string;
-  created_at: string;
-  has_transcript: boolean;
-  has_result: boolean;
-}
-
-export async function checkUrl(
-  url: string,
-  language: string
-): Promise<UrlMatch[]> {
-  const res = await fetch(
-    `${API_BASE}/check-url?url=${encodeURIComponent(url)}&language=${encodeURIComponent(language)}`,
-    { credentials: "include" }
-  );
-  if (!res.ok) {
-    throw new Error(`Failed to check URL: ${res.statusText}`);
-  }
-  return res.json();
-}
-
-export async function createGame(
-  videoUrl: string,
-  language: string = "ru",
-  mode: string = "full"
-): Promise<string> {
-  const res = await fetch(`${API_BASE}/games`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ video_url: videoUrl, language, mode }),
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to create game: ${res.statusText}`);
-  }
-  const data = await res.json();
-  return data.game_id;
-}
-
 export async function getGame(
   gameId: string
 ): Promise<{ status: GameStatus; result?: GameResult }> {
@@ -112,7 +72,7 @@ export async function uploadGameFile(
 
 export interface GameListItem {
   game_id: string;
-  video_url: string | null;
+  source_filename: string | null;
   language: string;
   created_at: string;
   status: string;
