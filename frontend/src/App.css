@@ -120,7 +120,7 @@ h1 {
   font-size: 0.9em;
 }
 
-.input-group button {
+.input-group button[type="submit"] {
   padding: 0.6em 1.5em;
   background: #646cff;
   color: white;
@@ -130,7 +130,7 @@ h1 {
   font-weight: 600;
 }
 
-.input-group button:disabled {
+.input-group button[type="submit"]:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -173,17 +173,19 @@ h1 {
 }
 
 .file-upload-btn {
-  background: transparent;
-  border: none;
-  color: #888;
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px dashed #555;
+  color: #aaa;
   cursor: pointer;
-  font-size: 0.85em;
-  padding: 0;
-  text-decoration: underline;
+  font-size: 0.95em;
+  padding: 0.6em 1em;
+  border-radius: 8px;
 }
 
 .file-upload-btn:hover {
-  color: #646cff;
+  border-color: #646cff;
+  color: #ccc;
 }
 
 .file-upload-btn:disabled {
