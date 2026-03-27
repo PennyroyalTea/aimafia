@@ -707,6 +707,7 @@ h1 {
 }
 
 @media print {
+  /* Hide UI controls */
   .url-input,
   .job-progress,
   .choice-dialog,
@@ -718,13 +719,20 @@ h1 {
   .subtitle,
   .error-box,
   .user-info,
+  .context-section,
+  .app-header,
   h1 {
     display: none !important;
+  }
+
+  @page {
+    margin: 1.5cm;
   }
 
   body {
     background: white;
     color: black;
+    font-size: 11pt;
   }
 
   .app {
@@ -732,27 +740,23 @@ h1 {
     padding: 0;
   }
 
-  .advice-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .player-advice {
-    border: 1px solid #ccc;
-    break-inside: avoid;
-  }
-
+  /* Page 1: game summary flows naturally, then breaks before advice */
   .game-summary {
-    break-inside: avoid;
+    margin-bottom: 0;
+    page-break-after: always;
   }
 
-  .winner-badge {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  .game-tabs {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.3rem;
+    margin-bottom: 1rem;
   }
 
   .game-tab {
     border-color: #ccc;
     color: #333;
+    font-size: 10pt;
+    padding: 0.3em 0.8em;
   }
 
   .game-tab.active {
@@ -760,13 +764,90 @@ h1 {
     -webkit-print-color-adjust: exact;
   }
 
-  .player-summary {
-    border-bottom-color: #ccc;
+  .summary-header {
+    margin-bottom: 0.75rem;
   }
 
+  .summary-text {
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  .key-moments,
+  .player-summaries {
+    margin-top: 1rem;
+  }
+
+  .key-moments h4,
+  .player-summaries h4 {
+    font-size: 11pt;
+    margin-bottom: 0.3rem;
+  }
+
+  .key-moments li {
+    font-size: 10pt;
+    margin-bottom: 0.2rem;
+  }
+
+  .player-summary {
+    padding: 0.5rem 0;
+    border-bottom-color: #ccc;
+    font-size: 10pt;
+  }
+
+  .winner-badge {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Page 2+: advice cards in 2-column grid */
+  .advice-section h3 {
+    font-size: 12pt;
+    margin-bottom: 0.75rem;
+  }
+
+  .advice-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .player-advice {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    break-inside: avoid;
+    font-size: 9.5pt;
+  }
+
+  .player-advice h4 {
+    font-size: 10pt;
+    margin: 0 0 0.4rem;
+  }
+
+  .player-advice h5 {
+    font-size: 8.5pt;
+    margin: 0.5rem 0 0.15rem;
+  }
+
+  .player-advice li {
+    font-size: 9pt;
+    margin-bottom: 0.1rem;
+  }
+
+  .player-advice ul {
+    padding-left: 1rem;
+  }
+
+  .player-advice p {
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+
+  /* Preserve colors */
   .good-plays h5,
   .mistakes h5,
-  .coaching h5 {
+  .coaching h5,
+  .status-badge {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }

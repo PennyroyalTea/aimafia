@@ -1,0 +1,3 @@
+- Never use the numero sign (No.) or its Unicode variant. Use the word or just the number.
+- Keep sentences concise -- avoid filler words and unnecessary qualifiers.
+- Use active voice when possible.

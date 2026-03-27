@@ -1,5 +1,9 @@
 """System prompts for LLM passes."""
 
+from pathlib import Path
+
+WRITING_RULES = (Path(__file__).parent / "writing_rules.md").read_text()
+
 LANGUAGE_NAMES: dict[str, str] = {
     "ru": "Russian",
     "en": "English",
@@ -81,6 +85,9 @@ Guidelines:
 - If information is unclear, say so rather than guessing
 
 Return ONLY valid JSON, no other text.
+
+Writing rules:
+""" + WRITING_RULES + """
 """
 
 PERSONAL_ADVICE_SYSTEM = """\
@@ -112,4 +119,6 @@ Guidelines:
 - Write advice in the language specified by the language instruction below
 
 Return ONLY valid JSON, no other text.
-"""
+
+Writing rules:
+""" + WRITING_RULES
