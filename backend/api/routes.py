@@ -171,7 +171,12 @@ async def get_game_pdf(game_id: str, _user: UserInfo = Depends(require_auth)):
         raise HTTPException(status_code=400, detail="Game has no analysis yet")
 
     analysis = GameAnalysis.model_validate(doc["analysis"])
-    pdf_bytes = generate_pdf(analysis)
+    try:
+        pdf_bytes = generate_pdf(analysis)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     filename = analysis.summary.title or "game-analysis"
 
     return Response(
