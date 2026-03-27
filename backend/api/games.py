@@ -17,6 +17,7 @@ from backend.models import (
     GameAnalysis,
     GameResult,
     GameStatus,
+    ImprovedTranscript,
     PipelineStep,
     Transcript,
 )
@@ -34,12 +35,14 @@ class GameStore:
         self,
         language: str,
         source_filename: str | None = None,
+        game_context: str = "",
     ) -> str:
         game_id = str(uuid4())
         doc = {
             "_id": game_id,
             "source_filename": source_filename,
             "language": language,
+            "game_context": game_context,
             "created_at": datetime.now(timezone.utc),
             "upload_status": {"step": PipelineStep.downloading.value, "detail": ""},
             "transcript": None,
@@ -144,6 +147,7 @@ async def run_pipeline(
     game_id: str,
     language: str,
     source_file: Path,
+    game_context: str = "",
 ) -> None:
     """Run the full analysis pipeline for a game."""
     loop = asyncio.get_running_loop()
@@ -219,7 +223,7 @@ async def run_pipeline(
             "Generating game analysis...",
         )
         analysis = await asyncio.to_thread(
-            generate_game_analysis, improved, 1, language
+            generate_game_analysis, improved, 1, language, game_context
         )
         await mongo.db.games.update_one(
             {"_id": game_id},
@@ -248,4 +252,48 @@ async def run_pipeline(
             shutil.rmtree(source_file.parent, ignore_errors=True)
         except Exception:
             pass
+        game_store.running_tasks.pop(game_id, None)
+
+
+async def run_reanalysis(
+    game_id: str,
+    language: str,
+    game_context: str = "",
+) -> None:
+    """Re-run only the analysis step using existing transcript + diarization."""
+    try:
+        doc = await game_store.get_game(game_id)
+        if not doc:
+            raise ValueError(f"Game {game_id} not found")
+
+        improved = ImprovedTranscript.model_validate(doc["diarization"])
+
+        await game_store.update_status(
+            game_id, PipelineStep.generating_analysis,
+            "Re-generating analysis with new context...",
+        )
+        analysis = await asyncio.to_thread(
+            generate_game_analysis, improved, 1, language, game_context
+        )
+        await mongo.db.games.update_one(
+            {"_id": game_id},
+            {"$set": {"analysis": analysis.model_dump()}},
+        )
+        await game_store.update_status(
+            game_id, PipelineStep.generating_analysis, "Done",
+        )
+
+        result = GameResult(game_id=game_id, analysis=analysis)
+        await game_store.set_result(game_id, result)
+
+    except Exception:
+        import traceback
+
+        logger.exception("Re-analysis failed for game %s", game_id)
+        error_result = GameResult(
+            game_id=game_id, error=traceback.format_exc()
+        )
+        await game_store.set_result(game_id, error_result)
+
+    finally:
         game_store.running_tasks.pop(game_id, None)

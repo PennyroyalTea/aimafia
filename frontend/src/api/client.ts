@@ -53,11 +53,15 @@ export async function getGame(
 
 export async function uploadGameFile(
   file: File,
-  language: string = "ru"
+  language: string = "ru",
+  gameContext: string = ""
 ): Promise<string> {
   const form = new FormData();
   form.append("file", file);
   form.append("language", language);
+  if (gameContext) {
+    form.append("game_context", gameContext);
+  }
   const res = await fetch(`${API_BASE}/games/upload`, {
     method: "POST",
     body: form,
@@ -65,6 +69,23 @@ export async function uploadGameFile(
   });
   if (!res.ok) {
     throw new Error(`Failed to upload file: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.game_id;
+}
+
+export async function reanalyzeGame(
+  gameId: string,
+  gameContext: string
+): Promise<string> {
+  const res = await fetch(`${API_BASE}/games/${gameId}/reanalyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ game_context: gameContext }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to re-analyze game: ${res.statusText}`);
   }
   const data = await res.json();
   return data.game_id;

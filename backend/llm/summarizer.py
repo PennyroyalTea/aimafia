@@ -57,6 +57,7 @@ def generate_game_analysis(
     transcript: ImprovedTranscript,
     game_number: int,
     language: str = "ru",
+    game_context: str = "",
 ) -> GameAnalysis:
     """Generate full game analysis: summary + personal advice.
 
@@ -64,6 +65,7 @@ def generate_game_analysis(
         transcript: Improved transcript with resolved speaker names.
         game_number: Which game number this is in the session.
         language: Language code (ru/en/uk) for the output text.
+        game_context: Optional free-form context (game moves, kills, votes) to enrich analysis.
 
     Returns:
         GameAnalysis with summary and per-player advice.
@@ -72,6 +74,14 @@ def generate_game_analysis(
     transcript_text = _format_transcript(transcript)
     lang_suffix = "\n\n" + language_instruction(language)
 
+    context_block = ""
+    if game_context.strip():
+        context_block = (
+            "\n\nAdditional game context provided by the user "
+            "(game moves, kills, votes, role reveals -- use to enrich analysis):\n"
+            + game_context.strip()
+        )
+
     # Pass 1: Game summary
     summary_text = _create_message(
         client,
@@ -79,6 +89,7 @@ def generate_game_analysis(
         user_content=(
             f"Game number: {game_number}\n\n"
             f"Transcript:\n\n{transcript_text}"
+            + context_block
         ),
     )
     summary_data = extract_json(summary_text)
@@ -91,6 +102,7 @@ def generate_game_analysis(
         user_content=(
             f"Game transcript:\n\n{transcript_text}\n\n"
             f"Game summary:\n{json.dumps(summary_data, ensure_ascii=False)}"
+            + context_block
         ),
     )
     advice_data = extract_json(advice_text)

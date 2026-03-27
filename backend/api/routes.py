@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from backend.api.auth import UserInfo, require_auth
-from backend.api.games import game_store, run_pipeline
+from backend.api.games import game_store, run_pipeline, run_reanalysis
 from backend import mongo
 from backend.models import GameAnalysis, GameResult, GameStatus, InterestSubmission, PipelineStep
 
@@ -74,6 +74,7 @@ async def list_games(_user: UserInfo = Depends(require_auth)):
 async def upload_file(
     file: UploadFile,
     language: str = Form("ru"),
+    game_context: str = Form(""),
     _user: UserInfo = Depends(require_auth),
 ):
     if not file.filename:
@@ -82,6 +83,7 @@ async def upload_file(
     game_id = await game_store.create_game(
         language=language,
         source_filename=file.filename,
+        game_context=game_context,
     )
 
     tmp_dir = tempfile.mkdtemp()
@@ -90,7 +92,37 @@ async def upload_file(
     dest.write_bytes(contents)
 
     task = asyncio.create_task(
-        run_pipeline(game_id, language, source_file=dest)
+        run_pipeline(game_id, language, source_file=dest, game_context=game_context)
+    )
+    game_store.running_tasks[game_id] = task
+    return CreateGameResponse(game_id=game_id)
+
+
+class ReanalyzeRequest(BaseModel):
+    game_context: str = ""
+
+
+@router.post("/games/{game_id}/reanalyze", response_model=CreateGameResponse)
+async def reanalyze_game(
+    game_id: str,
+    body: ReanalyzeRequest,
+    _user: UserInfo = Depends(require_auth),
+):
+    doc = await game_store.get_game(game_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if not doc.get("transcript") or not doc.get("diarization"):
+        raise HTTPException(
+            status_code=400,
+            detail="Game must have transcript and diarization before re-analysis",
+        )
+
+    await mongo.db.games.update_one(
+        {"_id": game_id}, {"$set": {"game_context": body.game_context}}
+    )
+
+    task = asyncio.create_task(
+        run_reanalysis(game_id, doc["language"], game_context=body.game_context)
     )
     game_store.running_tasks[game_id] = task
     return CreateGameResponse(game_id=game_id)

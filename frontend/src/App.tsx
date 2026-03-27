@@ -4,6 +4,7 @@ import {
   checkAuth,
   getGame,
   logout,
+  reanalyzeGame,
   subscribeToGame,
   uploadGameFile,
   type AuthUser,
@@ -58,10 +59,11 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
   const [stepDetail, setStepDetail] = useState("");
   const [result, setResult] = useState<GameResult | null>(null);
   const [error, setError] = useState<string>("");
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
 
   const handleSubmit = useCallback(
-    async (file: File, language: string) => {
+    async (file: File, language: string, gameContext: string) => {
       setAppState("processing");
       setCurrentStep("downloading");
       setStepDetail("Uploading file...");
@@ -69,7 +71,8 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
       setError("");
 
       try {
-        const gameId = await uploadGameFile(file, language);
+        const gameId = await uploadGameFile(file, language, gameContext);
+        setCurrentGameId(gameId);
 
         const unsub = subscribeToGame(
           gameId,
@@ -112,6 +115,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
       setStepDetail("Loading game...");
       setResult(null);
       setError("");
+      setCurrentGameId(gameId);
 
       try {
         const gameData = await getGame(gameId);
@@ -157,12 +161,60 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
     []
   );
 
+  const handleReanalyze = useCallback(
+    async (gameContext: string) => {
+      if (!currentGameId) return;
+
+      setAppState("processing");
+      setCurrentStep("generating_analysis");
+      setStepDetail("Re-generating analysis with new context...");
+      setResult(null);
+      setError("");
+
+      try {
+        const gameId = await reanalyzeGame(currentGameId, gameContext);
+
+        const unsub = subscribeToGame(
+          gameId,
+          (status) => {
+            setCurrentStep(status.step);
+            setStepDetail(status.detail);
+            if (status.step === "failed") {
+              setAppState("error");
+              setError(status.detail || "Re-analysis failed");
+            }
+          },
+          (gameResult) => {
+            if (gameResult.error) {
+              setAppState("error");
+              setError(gameResult.error);
+            } else {
+              setResult(gameResult);
+              setAppState("done");
+            }
+          },
+          (err) => {
+            setAppState("error");
+            setError(err.message);
+          }
+        );
+
+        unsubRef.current = unsub;
+      } catch (err) {
+        setAppState("error");
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [currentGameId]
+  );
+
   const handleReset = () => {
     unsubRef.current?.();
     unsubRef.current = null;
     setAppState("idle");
     setResult(null);
     setError("");
+    setCurrentGameId(null);
   };
 
   return (
@@ -221,7 +273,7 @@ function AnalyzerApp({ user, onLogout }: { user: AuthUser; onLogout: () => void 
 
       {appState === "done" && result && (
         <>
-          <ResultsView result={result} />
+          <ResultsView result={result} onReanalyze={handleReanalyze} />
           <button className="reset-btn" onClick={handleReset}>
             Analyze another game
           </button>
