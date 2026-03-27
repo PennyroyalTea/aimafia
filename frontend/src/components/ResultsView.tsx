@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { GameResult } from "../types";
+import { exportPdf } from "../utils/pdfExport";
 import { GameResults } from "./GameResults";
 
 interface ResultsViewProps {
@@ -11,6 +12,18 @@ export function ResultsView({ result, onReanalyze }: ResultsViewProps) {
   const [contextOpen, setContextOpen] = useState(false);
   const [gameContext, setGameContext] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-6");
+  const [savingPdf, setSavingPdf] = useState(false);
+
+  const handleSavePdf = async () => {
+    if (!result.analysis) return;
+    setSavingPdf(true);
+    try {
+      const title = result.analysis.summary.title || "game-analysis";
+      await exportPdf(result.analysis, `${title}.pdf`);
+    } finally {
+      setSavingPdf(false);
+    }
+  };
 
   if (result.error) {
     return (
@@ -27,8 +40,8 @@ export function ResultsView({ result, onReanalyze }: ResultsViewProps) {
 
   return (
     <div className="results-view">
-      <button className="print-btn" onClick={() => window.print()}>
-        Save as PDF
+      <button className="print-btn" onClick={handleSavePdf} disabled={savingPdf}>
+        {savingPdf ? "Generating PDF..." : "Save as PDF"}
       </button>
       <GameResults game={result.analysis} />
       {onReanalyze && (
